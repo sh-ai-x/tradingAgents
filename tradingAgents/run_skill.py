@@ -22,7 +22,18 @@ RUNTIME = ROOT / ".stock-research"
 FIXTURES = ROOT / ".claude" / "skills" / "stock-research" / "fixtures"
 
 sys.path.insert(0, str(ROOT))
-from tradingAgents import _impl  # noqa: E402  (the actual runner)
+# Also expose the parent dir so `tradingAgents` resolves whether invoked from
+# inside this folder (most common) or from the repo root.
+sys.path.insert(0, str(ROOT.parent))
+try:
+    from tradingAgents import _impl  # noqa: E402  (the actual runner)
+except ModuleNotFoundError:
+    # When run from inside tradingAgents/, `tradingAgents` is the current
+    # directory — load _impl as a top-level module instead.
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location("_impl", ROOT / "_impl.py")
+    _impl = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_impl)
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="stock-research")

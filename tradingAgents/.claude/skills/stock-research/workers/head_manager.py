@@ -15,6 +15,7 @@ import drivers as WD
 import macro as WM
 import forward_range as WFR
 import user_qa as WUQ
+import recency_checker as WRC
 import json
 from lib.persist import (
     write_bundle, accumulate, iso_filename_stem, list_runs
@@ -52,7 +53,7 @@ def compose(
     drivers_out = WD.run(drivers_inputs, today_iso)
     macro_out = WM.run(macro_inputs, today_iso)
     fr = WFR.run(forward_range_inputs, today_iso)
-    uqa = WUQ.run(user_qas_inputs, today_iso)
+    uqa, uqa_recency_log = WUQ.run(user_qas_inputs, today_iso)
 
     halt_flags = []
     omitted = []
@@ -75,6 +76,26 @@ def compose(
     # Flatten citations from fair_value + drivers + macro + forward_range.
     citations = _flatten_citations(fv, drivers_out, macro_out, fr)
 
+    # Aggregate recency logs from every per-output worker. Cross-cutting
+    # recency_checker also emits a unified log over the same inputs so the
+    # bundle carries both per-output events and a cross-cutting trace.
+    recency_log = (
+        fv.get("recency_log", [])
+        + _recency_log_for_drivers(drivers_inputs, today_iso)
+        + _recency_log_for_macro(macro_inputs, today_iso)
+        + _recency_log_for_forward_range(forward_range_inputs, today_iso)
+        + _recency_log_for_user_qa(user_qas_inputs, today_iso)
+        + uqa_recency_log
+    )
+    cross_log = WRC.run({
+        "fair_value": fair_value_inputs,
+        "drivers": drivers_inputs,
+        "macro": macro_inputs,
+        "forward_range": forward_range_inputs,
+        "user_qa": user_qas_inputs,
+    }, today_iso)
+    recency_log = _dedup(recency_log + cross_log)
+
     bundle = {
         "run_id": iso_filename_stem() + "_" + ticker.upper(),
         "ticker": ticker.upper(),
@@ -87,11 +108,58 @@ def compose(
         "user_qa": uqa,
         "decision_package": dp,
         "citations": citations,
-        "recency_log": [],
+        "recency_log": recency_log,
         "halt_flags": halt_flags,
         "omitted_outputs": omitted,
     }
     return bundle
+
+def _dedup(events):
+    seen = set()
+    out = []
+    for e in events:
+        key = (e.get("source"), e.get("age_days"), e.get("tier"), e.get("action"))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(e)
+    return out
+
+def _recency_log_for_drivers(events, today_iso):
+    return _recency_log_for(events, today_iso, "drivers", "url")
+
+def _recency_log_for_macro(rows, today_iso):
+    return _recency_log_for(rows, today_iso, "macro", "source")
+
+def _recency_log_for_forward_range(ranges, today_iso):
+    return _recency_log_for(ranges, today_iso, "forward_range", "url")
+
+def _recency_log_for_user_qa(qas, today_iso):
+    out = []
+    for q in qas:
+        for s in q.get("sources", []):
+            budget = q.get("budget_type", "drivers")
+            rr = WRC.check(budget, s["tier"], s["retrieval_iso"], today_iso)
+            if rr.action == "drop":
+                out.append({"source": s["url"], "age_days": rr.age_days,
+                            "budget_days": rr.budget_days, "tier": s["tier"],
+                            "action": "drop",
+                            "context": q.get("question", "")})
+    return out
+
+def _recency_log_for(items, today_iso, data_type, url_key):
+    out = []
+    for it in items or []:
+        rr = WRC.check(data_type, it["tier"], it["retrieval_iso"], today_iso)
+        if rr.action == "drop":
+            out.append({"source": it.get(url_key, ""), "age_days": rr.age_days,
+                        "budget_days": rr.budget_days, "tier": it["tier"],
+                        "action": "drop"})
+        elif rr.action == "flag":
+            out.append({"source": it.get(url_key, ""), "age_days": rr.age_days,
+                        "budget_days": rr.budget_days, "tier": it["tier"],
+                        "action": "flag"})
+    return out
 
 def _flatten_citations(fv, drivers, macro, fr) -> list[dict[str, Any]]:
     """Flatten every cited source into the canonical citation list."""

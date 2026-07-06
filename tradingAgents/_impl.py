@@ -27,6 +27,23 @@ def _load_fixtures(fixtures: Path) -> dict[str, Any]:
     path = fixtures / "default.json"
     return json.loads(path.read_text())
 
+def _user_qa_input(questions, fx, inputs):
+    """Build per-question inputs. When the configured answer is the literal
+    ``not_found_in_budget`` placeholder, attach no sources so the worker
+    emits the proper not-found envelope with search terms attempted."""
+    out = []
+    uqa_sources = inputs.get("user_qa_sources", [])
+    answers = fx.get("user_qa_answers", {})
+    for q in questions:
+        answer = answers.get(q, "not_found_in_budget")
+        if answer.startswith("not_found_in_budget"):
+            sources = []
+        else:
+            sources = uqa_sources
+        out.append({"question": q, "answer": answer, "sources": sources,
+                    "budget_type": "drivers"})
+    return out
+
 def run(ticker: str, questions: list[str], fixtures: Path, runtime: Path) -> dict[str, Any]:
     _ensure_skill_path()
     from workers import head_manager
@@ -39,11 +56,7 @@ def run(ticker: str, questions: list[str], fixtures: Path, runtime: Path) -> dic
         drivers_inputs=inputs.get("drivers", []),
         macro_inputs=inputs.get("macro", []),
         forward_range_inputs=inputs.get("forward_range", []),
-        user_qas_inputs=[
-            {"question": q, "answer": fx.get("user_qa_answers", {}).get(q, "not_found_in_budget"),
-             "sources": inputs.get("user_qa_sources", []), "budget_type": "drivers"}
-            for q in questions
-        ],
+        user_qas_inputs=_user_qa_input(questions, fx, inputs),
         questions=questions,
         decision_package={
             "forecastable_claims": ["Q2 earnings beat", "Forward P/E compresses if rates hold"],
