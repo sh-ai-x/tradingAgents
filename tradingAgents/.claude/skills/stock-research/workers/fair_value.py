@@ -6,12 +6,11 @@ rule, and emits low_confidence / bracket / synthesis modes.
 """
 from __future__ import annotations
 from typing import Any
-from evidence_synthesizer import synthesize
 from lib.citation import format_citation
 from lib.recency import check as recency_check, BUDGETS
 from lib.conflict import is_in_conflict, tier_bracket, weighted_synthesis
 
-def run(estimates: list[dict[str, Any]], today_iso: str) -> dict[str, Any]:
+def run(estimates, today_iso):
     """estimates = [{"value": float, "url": str, "retrieval_iso": str, "source_title": str,
                      "tier": "A"|"B"|"C"}]"""
     citations = []
@@ -25,6 +24,22 @@ def run(estimates: list[dict[str, Any]], today_iso: str) -> dict[str, Any]:
             recency_log.append({"source": est["url"], "age_days": rr.age_days,
                                 "budget_days": rr.budget_days, "tier": tier,
                                 "action": "drop"})
+            continue
+        if rr.action == "flag":
+            # Tier-A over budget: keep but tag display tier as C; flag emitted
+            # in the recency_log so the doctor can audit it.
+            display_tier = "C"
+            recency_log.append({"source": est["url"], "age_days": rr.age_days,
+                                "budget_days": rr.budget_days, "tier": tier,
+                                "action": "flag",
+                                "flag": rr.flag,
+                                "original_tier": tier,
+                                "display_tier": display_tier})
+            cit = format_citation(est["url"], est["retrieval_iso"], est["source_title"], display_tier)
+            citations.append(cit)
+            # Tier-A over-budget sources do NOT contribute to kept_a (we treat
+            # them as advisory). This prevents stale tier-A from diluting the
+            # synthesis.
             continue
         cit = format_citation(est["url"], est["retrieval_iso"], est["source_title"], tier)
         citations.append(cit)
@@ -41,6 +56,8 @@ def run(estimates: list[dict[str, Any]], today_iso: str) -> dict[str, Any]:
             "synthesis_target": 0.0, "mode": "bracket",
             "tier_bracket": [], "conflict": False, "low_confidence": True,
             "citations": [], "reasoning_trace": "not_found_in_budget",
+            "recency_log": recency_log,
+            "recency_violated_citations": [e["source"] for e in recency_log if e.get("action") == "flag"],
         }
 
     synthesis_target = sum(all_kept) / len(all_kept)
@@ -52,6 +69,8 @@ def run(estimates: list[dict[str, Any]], today_iso: str) -> dict[str, Any]:
             "tier_bracket": [str(x) for x in kept_a], "conflict": True,
             "low_confidence": False, "citations": citations,
             "reasoning_trace": f"tier-A disagreement > +/-10% -- bracket [{lo},{hi}]",
+            "recency_log": recency_log,
+            "recency_violated_citations": [e["source"] for e in recency_log if e.get("action") == "flag"],
         }
     if low_confidence:
         lo, hi = min(all_kept), max(all_kept)
@@ -61,6 +80,8 @@ def run(estimates: list[dict[str, Any]], today_iso: str) -> dict[str, Any]:
             "tier_bracket": [], "conflict": False, "low_confidence": True,
             "citations": citations,
             "reasoning_trace": "no tier-A sources -- bracket [min,max] of cited",
+            "recency_log": recency_log,
+            "recency_violated_citations": [e["source"] for e in recency_log if e.get("action") == "flag"],
         }
     # Synthesized path: weighted synthesis (tier-A weight 3, tier-B weight 1).
     weighted = [(v, 3.0) for v in kept_a] + [(v, 1.0) for v in kept_b]
@@ -72,4 +93,5 @@ def run(estimates: list[dict[str, Any]], today_iso: str) -> dict[str, Any]:
         "tier_bracket": [str(x) for x in kept_a], "conflict": False,
         "low_confidence": False, "citations": citations,
         "reasoning_trace": "tier-A within +/-10%, weighted synthesis",
+        "recency_log": recency_log,
     }

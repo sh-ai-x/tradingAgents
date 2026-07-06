@@ -33,6 +33,7 @@ def run(events: list[dict[str, Any]], today_iso: str) -> list[dict[str, Any]]:
             "original_tier": ev["tier"],
             "recency_violated": recency_violated,
             "citation_format": f"[{ev['url']} | {ev['retrieval_iso']} | {ev['source_title']} | {display_tier}]",
+            "age_days": rr.age_days,
         })
         if rr.action == "flag":
             recency_log.append({"source": ev["url"], "age_days": rr.age_days,
