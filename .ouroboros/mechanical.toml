@@ -1,0 +1,10 @@
+# Stage 1 mechanical contract for ooo-test.
+# Used by `ooo evaluate` Stage 1.
+# Keep minimal — empty repo, no real build/test pipeline yet.
+
+[commands]
+lint   = "true"
+build  = "true"
+test   = "true"
+static = "true"
+coverage = "true"
