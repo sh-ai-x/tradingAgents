@@ -1,13 +1,6 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-.pytest_cache/
+# Untracked sibling dirs at the brownfield playground root
+/alpha/
+/beta/
 
-# Ouroboros
-data/
-logs/
-
-# OS
-.DS_Store
+# Local worktrees created during ooo execution
+tradingAgents/.claude/worktrees/
