@@ -1,0 +1,131 @@
+{
+  "inputs": {
+    "fair_value": [
+      {
+        "value": 215.0,
+        "url": "https://www.goldmansachs.com/insights/aapl-fv",
+        "retrieval_iso": "2026-06-30",
+        "source_title": "Goldman Sachs AAPL Fair Value Update",
+        "tier": "A"
+      },
+      {
+        "value": 222.0,
+        "url": "https://www.morganstanley.com/research/aapl-fv",
+        "retrieval_iso": "2026-06-25",
+        "source_title": "Morgan Stanley AAPL Fair Value Update",
+        "tier": "A"
+      },
+      {
+        "value": 218.0,
+        "url": "https://finance.yahoo.com/quote/AAPL/analysis",
+        "retrieval_iso": "2026-07-02",
+        "source_title": "Yahoo Finance AAPL Analyst Estimates",
+        "tier": "B"
+      }
+    ],
+    "drivers": [
+      {
+        "timestamp": "2026-07-02T13:30:00Z",
+        "url": "https://www.reuters.com/technology/aapl-q3-shipments",
+        "claim": "Apple Q3 shipments +5% YoY on services strength",
+        "retrieval_iso": "2026-07-03",
+        "source_title": "Reuters AAPL Q3 shipment data",
+        "tier": "A",
+        "source_title_short": "Reuters AAPL Q3 shipments"
+      },
+      {
+        "timestamp": "2026-07-01T09:00:00Z",
+        "url": "https://www.cnbc.com/2026/07/01/aapl-china-down-yoy",
+        "claim": "Apple China revenue -8% YoY in Q3",
+        "retrieval_iso": "2026-07-01",
+        "source_title": "CNBC AAPL China revenue",
+        "tier": "A",
+        "source_title_short": "CNBC AAPL China"
+      },
+      {
+        "timestamp": "2026-06-29T16:00:00Z",
+        "url": "https://www.bloomberg.com/news/articles/2026-06-29/aapl-services",
+        "claim": "Services revenue hit all-time high, +14% YoY",
+        "retrieval_iso": "2026-06-30",
+        "source_title": "Bloomberg AAPL Services",
+        "tier": "A",
+        "source_title_short": "Bloomberg AAPL Services"
+      }
+    ],
+    "macro": [
+      {
+        "indicator": "Fed Funds Rate",
+        "value": "5.25%",
+        "source": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+        "retrieval_iso": "2026-07-01",
+        "tier": "A"
+      },
+      {
+        "indicator": "CPI YoY",
+        "value": "2.9%",
+        "source": "https://www.bls.gov/cpi/",
+        "retrieval_iso": "2026-06-25",
+        "tier": "A"
+      },
+      {
+        "indicator": "10Y Treasury Yield",
+        "value": "4.18%",
+        "source": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates",
+        "retrieval_iso": "2026-07-02",
+        "tier": "A"
+      }
+    ],
+    "forward_range": [
+      {
+        "label": "bear",
+        "low": 175.0,
+        "high": 195.0,
+        "probability": 0.2,
+        "evidence_count": 2,
+        "url": "https://www.morganstanley.com/research/aapl-bear",
+        "retrieval_iso": "2026-06-20",
+        "source_title": "Morgan Stanley AAPL Bear Case",
+        "tier": "A"
+      },
+      {
+        "label": "base",
+        "low": 210.0,
+        "high": 230.0,
+        "probability": 0.55,
+        "evidence_count": 5,
+        "url": "https://www.goldmansachs.com/insights/aapl-base",
+        "retrieval_iso": "2026-06-25",
+        "source_title": "Goldman Sachs AAPL Base Case",
+        "tier": "A"
+      },
+      {
+        "label": "bull",
+        "low": 235.0,
+        "high": 260.0,
+        "probability": 0.25,
+        "evidence_count": 3,
+        "url": "https://www.jpmorgan.com/research/aapl-bull",
+        "retrieval_iso": "2026-06-28",
+        "source_title": "JPMorgan AAPL Bull Case",
+        "tier": "A"
+      }
+    ],
+    "user_qa_sources": [
+      {
+        "url": "https://www.reuters.com/technology/aapl-q3-shipments",
+        "retrieval_iso": "2026-07-03",
+        "source_title": "Reuters AAPL Q3 shipment data",
+        "tier": "A"
+      },
+      {
+        "url": "https://www.cnbc.com/2026/07/01/aapl-china-down-yoy",
+        "retrieval_iso": "2026-07-01",
+        "source_title": "CNBC AAPL China revenue",
+        "tier": "A"
+      }
+    ]
+  },
+  "user_qa_answers": {
+    "Why did it drop in March 2026?": "not_found_in_budget -- no in-budget sources for March 2026 retrieved."
+  }
+}
