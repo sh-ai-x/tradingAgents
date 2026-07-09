@@ -1,6 +1,6 @@
-# Untracked sibling dirs at the brownfield playground root
+# Local scratch directories
 /alpha/
 /beta/
 
-# Local worktrees created during ooo execution
+# Local agent worktrees
 tradingAgents/.claude/worktrees/
