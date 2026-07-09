@@ -2,8 +2,8 @@
 """
 Build script for the stock-research skill.
 
-Writes all skill files (including dotfile paths like .claude/, .codex/,
-.stock-research/) into the tradingAgents/ tree.
+Writes the Codex plugin package under tradingAgents/src/ and keeps separate
+Claude/Codex shim files for host-specific behavior.
 
 Run from the repo root:
 
@@ -15,10 +15,14 @@ import json
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent  # tradingAgents/
-SKILL_DIR = ROOT / ".claude" / "skills" / "stock-research"
+SKILL_DIR = ROOT / "src" / "skills" / "stock-research"
+CLAUDE_DIR = ROOT / ".claude"
 CODEX_DIR = ROOT / ".codex"
+SRC_CODEX_DIR = ROOT / "src" / "codex"
+SRC_CLAUDE_DIR = ROOT / "src" / "claude"
 RUNTIME = ROOT / ".stock-research"
 
 # ---------------------------------------------------------------------------
@@ -33,52 +37,53 @@ description: |
   6-month forward range, user Q&A) with inline citations, tier-classified
   sources (A/B/C), recency budgets, and conflict-resolution rules. Persisted
   as JSON for cross-date comparability. No investment advice — research only.
-version: 1.0.0
-capability: [read, compute, write-confirm]
-claim_class: [factual, interpretive, advisory]
-tier_definitions:
-  A: "Peer/primary — broker research, regulator filings, primary newswires, company IR/SEC filings."
-  B: "Aggregators — Yahoo Finance, Reuters, MarketWatch, MarketBeat, Bloomberg public mirror."
-  C: "Blogs, social media, forums — never displayed as supporting evidence; always suppressed."
-recency_budget_days:
-  price: 7
-  drivers: 7
-  fundamentals: 90
-  fair_value: 90
-  forward_range: 90
-  macro: 30
-citation_format: "[URL | retrieval_iso | source_title | tier]"
-tier_a_disagreement_threshold_pct: 10
-bundle_root: ".stock-research"
-bundle_path_template: ".stock-research/{ticker}/{iso_datetime}.json"
-stops_before:
-  - "Acting on the bundle as investment advice (DISCLAIMER.md)."
-  - "Modifying files outside .stock-research/ unless the user explicitly authorizes."
-  - "Citing tier-C sources as supporting evidence (always suppressed)."
-  - "Asserting a major claim with fewer than two independent sources without [single_source] flag."
-  - "Synthesizing fair_value or forward_range when tier-A disagreement exceeds +/-10% -- emit bracket only."
-required_outputs:
-  - fair_value
-  - drivers
-  - macro_market_state
-  - forward_range
-  - user_qa
-commands:
-  - name: run
-    pattern: "/stock-research <TICKER> [questions...]"
-    description: "Execute a new research run for a ticker."
-  - name: show
-    pattern: "/stock-research show <run-id>"
-    description: "Re-render a prior bundle from disk without re-execution."
-  - name: doctor
-    pattern: "/stock-research doctor <run-id> [--deep]"
-    description: "Validate a prior bundle; default fast mechanical, --deep = full audit."
+metadata:
+  version: 1.0.0
+  capability: [read, compute, write-confirm]
+  claim_class: [factual, interpretive, advisory]
+  tier_definitions:
+    A: "Peer/primary — broker research, regulator filings, primary newswires, company IR/SEC filings."
+    B: "Aggregators — Yahoo Finance, Reuters, MarketWatch, MarketBeat, Bloomberg public mirror."
+    C: "Blogs, social media, forums — never displayed as supporting evidence; always suppressed."
+  recency_budget_days:
+    price: 7
+    drivers: 7
+    fundamentals: 90
+    fair_value: 90
+    forward_range: 90
+    macro: 30
+  citation_format: "[URL | retrieval_iso | source_title | tier]"
+  tier_a_disagreement_threshold_pct: 10
+  bundle_root: ".stock-research"
+  bundle_path_template: ".stock-research/{ticker}/{iso_datetime}.json"
+  stops_before:
+    - "Acting on the bundle as investment advice (DISCLAIMER.md)."
+    - "Modifying files outside .stock-research/ unless the user explicitly authorizes."
+    - "Citing tier-C sources as supporting evidence (always suppressed)."
+    - "Asserting a major claim with fewer than two independent sources without [single_source] flag."
+    - "Synthesizing fair_value or forward_range when tier-A disagreement exceeds +/-10% -- emit bracket only."
+  required_outputs:
+    - fair_value
+    - drivers
+    - macro_market_state
+    - forward_range
+    - user_qa
+  commands:
+    - name: run
+      pattern: "/stock-research <TICKER> [questions...]"
+      description: "Execute a new research run for a ticker."
+    - name: show
+      pattern: "/stock-research show <run-id>"
+      description: "Re-render a prior bundle from disk without re-execution."
+    - name: doctor
+      pattern: "/stock-research doctor <run-id> [--deep]"
+      description: "Validate a prior bundle; default fast mechanical, --deep = full audit."
 ---
 
 # Stock Research Skill
 
-The skill runs an Ouroboros-style elicitation interview, then orchestrates
-worker outputs to produce a persisted ResearchBundle.
+The skill captures the requested research scope, then orchestrates worker
+outputs to produce a persisted ResearchBundle.
 
 ## Invocation
 
@@ -87,6 +92,28 @@ worker outputs to produce a persisted ResearchBundle.
 /stock-research show 2026-07-07T10-15-00Z_AAPL
 /stock-research doctor 2026-07-07T10-15-00Z_AAPL
 ```
+
+## Fresh Search Contract
+
+`/stock-research <TICKER>` is a live research command. Every new run must
+perform fresh web/source retrieval for that ticker during the current
+invocation. Do not use prior `.stock-research/` bundles, analyst scratch files,
+fixtures, cached bundle outputs, or another ticker's evidence as support for a
+new run.
+
+Allowed reuse is narrow:
+
+- `show` and `doctor` may read persisted bundles because they do not create new
+  research.
+- `follow_up` and `postmortem_required` may accumulate after the fresh evidence
+  bundle is composed.
+- Local fixture execution is test-only and must be explicitly labeled as such;
+  it is not a valid `/stock-research <TICKER>` run.
+
+For Codex, use built-in web search for current sources. For Claude, the
+Claude-only `insane-search@gptaku-plugins` setting may be used. In both hosts,
+record `retrieval_iso` for the current run and emit `not_found_in_budget` with
+search terms attempted instead of filling gaps from old outputs.
 
 ## Doctrine (read first)
 
@@ -164,105 +191,68 @@ same ticker -- the head manager reads prior bundles in
 `.stock-research/<TICKER>/` and merges them.
 """
 
-CODEX_MANIFEST = """# Codex Manifest — strict subset of SKILL.md (Claude Code skill)
+CODEX_AGENTS = """# Codex Shim
 
-This manifest describes the same `stock-research` skill for Codex harnesses.
-The contract is the same; only the loader shape differs (Codex uses an
-`AGENTS.md` sibling instead of `SKILL.md`).
+Use the shared `stock-research` skill manifest:
 
-## Capability
+- `src/skills/stock-research/SKILL.md`
 
-- `read` — read sources and prior bundles.
-- `compute` — synthesize fair_value / forward_range.
-- `write-confirm` — write to `.stock-research/` only after the head_manager
-  approves the bundle (status != `dropped`).
+Codex uses its built-in web search path. Do not depend on
+`insane-search@gptaku-plugins`; that plugin is Claude-only in this repository.
 
-## Claim Classes
+Codex plugin metadata lives in `src/.codex-plugin/plugin.json`; Codex MCP and
+hook metadata lives under `src/codex/`.
+"""
 
-- `factual` — cited numeric or factual statements (price, earnings, macro data).
-- `interpretive` — synthesized judgments about what the data means
-  (drivers, fair-value band rationale).
-- `advisory` — presentational framing that is NOT investment advice
-  (see DISCLAIMER.md).
+CODEX_SKILL_MANIFEST = """# Codex Skill Shim
 
-## Tier Definitions (deterministic)
+Use `tradingAgents/src/skills/stock-research/SKILL.md` for the shared
+skill contract and execution rules.
 
-| Tier | Class                                            | Display? |
-|------|--------------------------------------------------|----------|
-| A    | Peer/primary: broker research, regulator filings, primary newswires, company IR/SEC filings | Yes |
-| B    | Aggregators: Yahoo, Reuters, MarketWatch, MarketBeat, Bloomberg public mirror | Yes (secondary) |
-| C    | Blogs, social, forums                            | No — suppressed |
+Codex should use built-in web search. The `insane-search@gptaku-plugins`
+setting is Claude-only.
+"""
 
-## Recency Budgets (days)
+CLAUDE_SETTINGS = {
+    "enabledPlugins": {
+        "insane-search@gptaku-plugins": True,
+    },
+}
 
-| Data type      | Budget |
-|----------------|--------|
-| price          | 7      |
-| drivers        | 7      |
-| fundamentals   | 90     |
-| fair_value     | 90     |
-| forward_range  | 90     |
-| macro          | 30     |
+PLUGIN_JSON = {
+    "name": "trading-agents",
+    "version": "1.0.0",
+    "description": "Shared stock-research skill package for Claude Code and Codex.",
+    "author": {"name": "tradingAgents"},
+    "license": "UNLICENSED",
+    "keywords": ["stock-research", "trading", "codex", "claude"],
+    "skills": "./skills/",
+    "mcpServers": "./.mcp.json",
+    "interface": {
+        "displayName": "Trading Agents",
+        "shortDescription": "Evidence-backed stock research skill.",
+        "longDescription": "Shared Claude Code and Codex skill package for evidence-backed stock research bundles.",
+        "developerName": "tradingAgents",
+        "category": "Productivity",
+        "capabilities": ["Read", "Write", "Compute"],
+        "defaultPrompt": [
+            "Run stock research for AAPL.",
+            "Show the latest stock-research bundle.",
+            "Doctor a saved stock-research run.",
+        ],
+        "brandColor": "#2563EB",
+    },
+}
 
-Tier-graded enforcement: tier-A over budget -> keep + flag
-`[recency_violated: Nd over budget]` + tier downgrade to C. tier-B/C over
-budget -> drop + log to `recency_log`.
+MCP_JSON = {"mcpServers": {}}
 
-## Citation Format
+SRC_AGENTS = """# Source Layout
 
-`[URL | retrieval_iso | source_title | tier]`
+This directory is split by responsibility:
 
-Every claim in every worker output bears this format. Tier-C citations are
-recorded for audit but never displayed as supporting evidence.
-
-## Conflict Resolution
-
-±10% consensus threshold on the synthesis target. Within threshold -> recency
-+ independence-weighted synthesis with reasoning_trace. Beyond threshold ->
-tier-anchored bracket `[min(tier-A), max(tier-A)]` with `conflict: true`,
-probabilities suppressed, outliers annotated `[outlier: ...]`.
-
-## low_confidence
-
-`low_confidence: true` is emitted when tier-A count == 0 for an output. The
-output falls back to min/max of cited sources; never synthesized.
-
-## Halt Conditions
-
-Bundle is emitted as `status: "partial"` with `halt_flags` and
-`omitted_outputs` populated. The skill never refuses outright.
-
-## Stops
-
-- No write outside `.stock-research/` without explicit user authorization.
-- No tier-C as supporting evidence.
-- No single-source major claim asserted as fact.
-- No synthesis when tier-A disagreement > ±10%; bracket only.
-- No advice (see DISCLAIMER.md).
-
-## Commands (Codex invocation)
-
-```
-stock-research run <TICKER> [questions...]
-stock-research show <run-id>
-stock-research doctor <run-id> [--deep]
-```
-
-## Workers
-
-`head_manager`, `fair_value`, `forward_range`, `drivers`, `macro`, `user_qa`,
-`evidence_synthesizer`, `recency_checker`, `doctor`.
-
-## Decision Package Fields
-
-`forecastable_claims`, `lifecycle_assumptions`, `contrary_evidence`,
-`owner_roles`, `follow_up`, `postmortem_required`. All six required.
-
-## Cross-Run Accumulation
-
-`follow_up` and `postmortem_required` accumulate across runs of the same
-ticker. The head_manager reads prior bundles in `.stock-research/<TICKER>/`
-and merges them.
+- `common/` contains files shared by Claude Code and Codex.
+- `claude/` contains Claude-only settings such as `insane-search@gptaku-plugins`.
+- `codex/` contains Codex-only shims, MCP, hooks, and metadata. Codex uses built-in web search.
 """
 
 # ---------------------------------------------------------------------------
@@ -947,7 +937,11 @@ def _check_citations(bundle: dict[str, Any]) -> list[str]:
     errors = []
     seen = set()
     for c in bundle.get("citations", []):
-        s = format_citation(c["url"], c["retrieval_iso"], c["source_title"], c["tier"])
+        published_iso = c.get("published_iso")
+        if not published_iso:
+            errors.append(f"citation missing published_iso: {c!r}")
+            continue
+        s = format_citation(c["url"], published_iso, c["source_title"], c["tier"])
         if parse_citation(s) is None:
             errors.append(f"citation malformed: {c!r}")
         if c["tier"] == "C":
@@ -1048,8 +1042,7 @@ from lib.citation import format_citation
 REQUIRED_OUTPUTS = ["fair_value", "drivers", "macro_market_state", "forward_range", "user_qa"]
 
 def elicit(ticker: str, questions: list[str], date_of_record: str) -> dict[str, Any]:
-    """Ouroboros-style elicitation. In this deterministic implementation, we
-    formalize the questions as the research scope. Returns a profile."""
+    """Formalize the questions as the research scope and return a profile."""
     return {
         "ticker": ticker.upper(),
         "questions": questions,
@@ -1207,9 +1200,9 @@ Usage:
     python3 tradingAgents/run_skill.py show <run-id>
     python3 tradingAgents/run_skill.py doctor <run-id> [--deep]
 
-In a real harness this is invoked by the Claude Code or Codex loader. Here it
-is driven against an in-fixture evidence set so the full pipeline can be
-exercised end-to-end.
+In a real harness this is invoked by the Claude Code or Codex loader after the
+agent performs fresh web/source retrieval. The local `run-fixture` subcommand is
+test-only and uses bundled deterministic evidence.
 """
 from __future__ import annotations
 import argparse
@@ -1220,10 +1213,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 RUNTIME = ROOT / ".stock-research"
-FIXTURES = ROOT / ".claude" / "skills" / "stock-research" / "fixtures"
+FIXTURES = ROOT / "src" / "skills" / "stock-research" / "fixtures"
 
 sys.path.insert(0, str(ROOT))
-from tradingAgents import _impl  # noqa: E402  (the actual runner)
+# Also expose the parent dir so `tradingAgents` resolves whether invoked from
+# inside this folder (most common) or from the repo root.
+sys.path.insert(0, str(ROOT.parent))
+try:
+    from tradingAgents import _impl  # noqa: E402  (the actual runner)
+except ModuleNotFoundError:
+    # When run from inside tradingAgents/, `tradingAgents` is the current
+    # directory — load _impl as a top-level module instead.
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location("_impl", ROOT / "_impl.py")
+    _impl = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_impl)
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="stock-research")
@@ -1232,6 +1236,10 @@ def main(argv=None):
     pr = sub.add_parser("run")
     pr.add_argument("ticker")
     pr.add_argument("questions", nargs="*")
+
+    pf = sub.add_parser("run-fixture")
+    pf.add_argument("ticker")
+    pf.add_argument("questions", nargs="*")
 
     ps = sub.add_parser("show")
     ps.add_argument("run_id")
@@ -1242,7 +1250,16 @@ def main(argv=None):
 
     args = p.parse_args(argv)
     if args.cmd == "run":
-        bundle = _impl.run(args.ticker.upper(), args.questions, FIXTURES, RUNTIME)
+        bundle = _impl.run(args.ticker.upper(), args.questions, RUNTIME)
+        out = {
+            "ticker": bundle["ticker"],
+            "run_id": bundle["run_id"],
+            "path": str(_impl.last_path()),
+            "status": bundle["status"],
+        }
+        print(json.dumps(out, indent=2))
+    elif args.cmd == "run-fixture":
+        bundle = _impl.run_fixture(args.ticker.upper(), args.questions, FIXTURES, RUNTIME)
         out = {
             "ticker": bundle["ticker"],
             "run_id": bundle["run_id"],
@@ -1286,7 +1303,15 @@ def _load_fixtures(fixtures: Path) -> dict[str, Any]:
     path = fixtures / "default.json"
     return json.loads(path.read_text())
 
-def run(ticker: str, questions: list[str], fixtures: Path, runtime: Path) -> dict[str, Any]:
+def run(ticker: str, questions: list[str], runtime: Path) -> dict[str, Any]:
+    raise RuntimeError(
+        "stock-research run requires fresh web/source retrieval for this ticker. "
+        "The local CLI cannot perform host web search directly; invoke the "
+        "Codex/Claude skill so the agent searches live sources, or use "
+        "`run-fixture` only for deterministic tests."
+    )
+
+def run_fixture(ticker: str, questions: list[str], fixtures: Path, runtime: Path) -> dict[str, Any]:
     from .workers import head_manager
     fx = _load_fixtures(fixtures)
     inputs = fx.get("inputs", {})
@@ -1416,25 +1441,60 @@ FIXTURE = {
 
 def write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content)
+    try:
+        path.write_text(content)
+    except PermissionError:
+        print(f"skipped {path.relative_to(ROOT)} (permission denied)")
+        return
     print(f"wrote {path.relative_to(ROOT)}")
 
 def write_json(path: Path, obj: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, indent=2))
+    try:
+        path.write_text(json.dumps(obj, indent=2))
+    except PermissionError:
+        print(f"skipped {path.relative_to(ROOT)} (permission denied)")
+        return
     print(f"wrote {path.relative_to(ROOT)}")
 
-def main() -> None:
-    # Claude Code skill manifest.
-    write(SKILL_DIR / "SKILL.md", SKILL_MD)
+def existing_text(path: Path, fallback: str) -> str:
+    return path.read_text() if path.exists() else fallback
 
-    # Codex manifest (strict subset).
-    write(CODEX_DIR / "AGENTS.md", CODEX_MANIFEST)
-    write(CODEX_DIR / "MANIFEST.md", CODEX_MANIFEST)
+def existing_json(path: Path, fallback: Any) -> Any:
+    return json.loads(path.read_text()) if path.exists() else fallback
+
+def ensure_symlink(path: Path, target: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        path.unlink()
+    elif path.exists():
+        print(f"kept existing non-symlink {path.relative_to(ROOT)}")
+        return
+    path.symlink_to(target)
+    print(f"linked {path.relative_to(ROOT)} -> {target}")
+
+def main() -> None:
+    # Shared skill manifest and implementation.
+    write(SKILL_DIR / "SKILL.md", existing_text(SKILL_DIR / "SKILL.md", SKILL_MD))
+
+    # Separated Claude/Codex shims.
+    write_json(SRC_CLAUDE_DIR / "settings.json", CLAUDE_SETTINGS)
+    write_json(CLAUDE_DIR / "settings.json", CLAUDE_SETTINGS)
+    write(ROOT / "src" / "AGENTS.md", SRC_AGENTS)
+    write(SRC_CODEX_DIR / "AGENTS.md", CODEX_AGENTS)
+    write(SRC_CODEX_DIR / "MANIFEST.md", CODEX_AGENTS)
+    write(SRC_CODEX_DIR / "skills" / "stock-research" / "MANIFEST.md", CODEX_SKILL_MANIFEST)
+    write(CODEX_DIR / "AGENTS.md", CODEX_AGENTS)
+    write(CODEX_DIR / "MANIFEST.md", CODEX_AGENTS)
+    write(CODEX_DIR / "skills" / "stock-research" / "MANIFEST.md", CODEX_SKILL_MANIFEST)
+    write_json(ROOT / "src" / ".codex-plugin" / "plugin.json", PLUGIN_JSON)
+    write_json(SRC_CODEX_DIR / ".mcp.json", MCP_JSON)
+    write_json(SRC_CODEX_DIR / "hooks.json", {"hooks": {}})
+    ensure_symlink(CLAUDE_DIR / "skills" / "stock-research", "../../src/skills/stock-research")
 
     # Library modules.
     write(SKILL_DIR / "lib" / "__init__.py", LINIT)
-    write(SKILL_DIR / "lib" / "citation.py", LIBCITATION)
+    write(SKILL_DIR / "lib" / "citation.py", existing_text(SKILL_DIR / "lib" / "citation.py", LIBCITATION))
     write(SKILL_DIR / "lib" / "recency.py", LIBRECENCY)
     write(SKILL_DIR / "lib" / "tier.py", LIBTIER)
     write(SKILL_DIR / "lib" / "conflict.py", LIBCONFLICT)
@@ -1443,21 +1503,23 @@ def main() -> None:
 
     # Worker modules.
     write(SKILL_DIR / "workers" / "__init__.py", WINIT)
-    write(SKILL_DIR / "workers" / "fair_value.py", WFAIRVALUE)
-    write(SKILL_DIR / "workers" / "drivers.py", WDRIVERS)
-    write(SKILL_DIR / "workers" / "macro.py", WMACRO)
-    write(SKILL_DIR / "workers" / "forward_range.py", WFORWARDRANGE)
-    write(SKILL_DIR / "workers" / "user_qa.py", WUQA)
+    write(SKILL_DIR / "workers" / "fair_value.py", existing_text(SKILL_DIR / "workers" / "fair_value.py", WFAIRVALUE))
+    write(SKILL_DIR / "workers" / "drivers.py", existing_text(SKILL_DIR / "workers" / "drivers.py", WDRIVERS))
+    write(SKILL_DIR / "workers" / "macro.py", existing_text(SKILL_DIR / "workers" / "macro.py", WMACRO))
+    write(SKILL_DIR / "workers" / "forward_range.py", existing_text(SKILL_DIR / "workers" / "forward_range.py", WFORWARDRANGE))
+    write(SKILL_DIR / "workers" / "user_qa.py", existing_text(SKILL_DIR / "workers" / "user_qa.py", WUQA))
     write(SKILL_DIR / "workers" / "evidence_synthesizer.py", WEVIDENCE)
-    write(SKILL_DIR / "workers" / "recency_checker.py", WRECENCY)
+    write(SKILL_DIR / "workers" / "recency_checker.py", existing_text(SKILL_DIR / "workers" / "recency_checker.py", WRECENCY))
     write(SKILL_DIR / "workers" / "doctor.py", WDOCTOR)
-    write(SKILL_DIR / "workers" / "head_manager.py", WHEADMANAGER)
+    write(SKILL_DIR / "workers" / "head_manager.py", existing_text(SKILL_DIR / "workers" / "head_manager.py", WHEADMANAGER))
 
     # Skill package init.
     write(SKILL_DIR / "__init__.py", SKILLINIT)
 
     # Fixtures.
-    write_json(SKILL_DIR / "fixtures" / "default.json", FIXTURE)
+    write_json(SKILL_DIR / "fixtures" / "default.json", existing_json(SKILL_DIR / "fixtures" / "default.json", FIXTURE))
+
+    write_json(ROOT / "src" / ".mcp.json", MCP_JSON)
 
     # CLI driver.
     write(ROOT / "run_skill.py", CLI)
@@ -1469,35 +1531,47 @@ def main() -> None:
         write(_impl_path, IMPL)
     write(ROOT / "__init__.py", PKGINIT)
 
-    # Codex skills mirror.
-    codex_skills = ROOT / ".codex" / "skills" / "stock-research"
-    write(codex_skills / "MANIFEST.md",
-          "# Codex skill manifest -- delegates to .claude/skills/stock-research/SKILL.md\n\n"
-          "All execution logic lives in tradingAgents/.claude/skills/stock-research/.\n")
-
     # README for the skill.
     write(ROOT / "README.md", """# tradingAgents
 
-Stock-research skill for Claude Code and Codex.
+Evidence-backed stock research skill for Claude Code and Codex.
 
-## Layout
+## What it does
 
-- `.claude/skills/stock-research/` — Claude Code skill (SKILL.md frontmatter + workers + lib).
-- `.codex/AGENTS.md` and `.codex/MANIFEST.md` — strict-subset manifest for Codex.
-- `.stock-research/<TICKER>/<ISO>.json` — persisted research bundles.
-- `run_skill.py` — CLI driver for `run`, `show`, `doctor`.
+`tradingAgents` collects current stock evidence, classifies source quality,
+applies recency and conflict rules, and emits table-first research bundles.
+It is research material only, not investment advice.
+
+## Repository Layout
+
+- `src/skills/stock-research/` - shared skill manifest, workers, lib, and fixtures.
+- `src/skills/stock-quality-factors/` - companion scoring framework for reliability, moat, stability, growth quality, and risk-adjusted score.
+- `src/claude/settings.json` - Claude-only settings.
+- `src/codex/` - Codex-only shims, hooks, and metadata.
+- `src/.codex-plugin/plugin.json` - Codex plugin metadata.
+- `.claude/skills/stock-research` - compatibility symlink to the shared skill.
+- `.codex/AGENTS.md`, `.codex/MANIFEST.md`, and `.codex/skills/stock-research/MANIFEST.md` - Codex shims.
+- `run_skill.py` - local CLI driver for fixture, show, and doctor workflows.
+
+Runtime bundles under `.stock-research/` and agent scratch worktrees are local
+artifacts and are not part of the public repository.
 
 ## Quickstart
 
 ```sh
-python3 tradingAgents/run_skill.py run AAPL "Why did it drop in March 2026?"
+python3 tradingAgents/run_skill.py run-fixture AAPL "Why did it drop in March 2026?"
 python3 tradingAgents/run_skill.py show <run-id>
 python3 tradingAgents/run_skill.py doctor <run-id> --deep
 ```
 
+Live research runs are intended to be invoked through the Claude Code or Codex
+skill host so the agent can perform fresh web/source retrieval. The local
+`run-fixture` command is deterministic and intended for tests.
+
 ## Disclaimer
 
-See `../DISCLAIMER.md` at the repo root. This is research material only.
+This repository produces research material only. It does not provide buy, sell,
+or hold recommendations.
 """)
 
     print("done.")

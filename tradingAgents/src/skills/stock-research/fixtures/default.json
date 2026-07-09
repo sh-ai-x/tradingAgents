@@ -1,0 +1,271 @@
+{
+  "inputs": {
+    "fair_value": [
+      {
+        "value": 215.0,
+        "url": "https://www.goldmansachs.com/insights/aapl-fv",
+        "retrieval_iso": "2026-06-30",
+        "source_title": "Goldman Sachs AAPL Fair Value Update",
+        "tier": "A",
+        "published_iso": "2026-06-30"
+      },
+      {
+        "value": 222.0,
+        "url": "https://www.morganstanley.com/research/aapl-fv",
+        "retrieval_iso": "2026-06-25",
+        "source_title": "Morgan Stanley AAPL Fair Value Update",
+        "tier": "A",
+        "published_iso": "2026-06-25"
+      },
+      {
+        "value": 218.0,
+        "url": "https://finance.yahoo.com/quote/AAPL/analysis",
+        "retrieval_iso": "2026-07-02",
+        "source_title": "Yahoo Finance AAPL Analyst Estimates",
+        "tier": "B",
+        "published_iso": "2026-07-02"
+      },
+      {
+        "value": 230.0,
+        "url": "https://www.goldmansachs.com/insights/aapl-fv-q1",
+        "retrieval_iso": "2026-01-05",
+        "source_title": "Goldman Sachs AAPL Fair Value Q1 Stale",
+        "tier": "A",
+        "published_iso": "2026-01-05"
+      },
+      {
+        "value": 209.0,
+        "url": "https://www.fool.com/aapl-fair-value",
+        "retrieval_iso": "2026-01-12",
+        "source_title": "Motley Fool AAPL Fair Value",
+        "tier": "B",
+        "published_iso": "2026-01-12"
+      }
+    ],
+    "drivers": [
+      {
+        "timestamp": "2026-07-02T13:30:00Z",
+        "url": "https://www.reuters.com/technology/aapl-q3-shipments",
+        "claim": "Apple Q3 shipments +5% YoY on services strength",
+        "retrieval_iso": "2026-07-03",
+        "source_title": "Reuters AAPL Q3 shipment data",
+        "tier": "A",
+        "source_title_short": "Reuters AAPL Q3 shipments",
+        "published_iso": "2026-07-03"
+      },
+      {
+        "timestamp": "2026-07-01T09:00:00Z",
+        "url": "https://www.cnbc.com/2026/07/01/aapl-china-down-yoy",
+        "claim": "Apple China revenue -8% YoY in Q3",
+        "retrieval_iso": "2026-07-01",
+        "source_title": "CNBC AAPL China revenue",
+        "tier": "A",
+        "source_title_short": "CNBC AAPL China",
+        "published_iso": "2026-07-01"
+      },
+      {
+        "timestamp": "2026-06-29T16:00:00Z",
+        "url": "https://www.bloomberg.com/news/articles/2026-06-29/aapl-services",
+        "claim": "Services revenue hit all-time high, +14% YoY",
+        "retrieval_iso": "2026-06-30",
+        "source_title": "Bloomberg AAPL Services",
+        "tier": "A",
+        "source_title_short": "Bloomberg AAPL Services",
+        "published_iso": "2026-06-30"
+      },
+      {
+        "timestamp": "2026-06-15T09:00:00Z",
+        "url": "https://www.bloomberg.com/news/articles/2026-06-15/aapl-margin",
+        "claim": "Gross margin guidance raised for FY26",
+        "retrieval_iso": "2026-05-20",
+        "source_title": "Bloomberg AAPL Margin (tier-A, over 7d budget -> flagged)",
+        "tier": "A",
+        "published_iso": "2026-05-20"
+      },
+      {
+        "timestamp": "2026-05-20T09:00:00Z",
+        "url": "https://www.fool.com/aapl-q2-earnings",
+        "claim": "AAPL Q2 earnings recap",
+        "retrieval_iso": "2026-05-10",
+        "source_title": "Motley Fool AAPL Q2 (tier-B, over 7d -> dropped)",
+        "tier": "B",
+        "published_iso": "2026-05-10"
+      }
+    ],
+    "fundamentals": [
+      {
+        "metric": "Revenue",
+        "value": "$94.0B",
+        "period": "FY2026 Q3",
+        "filing_type": "10-Q",
+        "filing_date": "2026-06-28",
+        "accession": "0000320193-26-000070",
+        "source": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000070/aapl-20260628.htm",
+        "retrieval_iso": "2026-07-02",
+        "source_title": "Apple FY2026 Q3 Form 10-Q",
+        "tier": "A",
+        "published_iso": "2026-07-02"
+      },
+      {
+        "metric": "Operating Cash Flow",
+        "value": "$31.5B",
+        "period": "FY2026 Q3 YTD",
+        "filing_type": "10-Q",
+        "filing_date": "2026-06-28",
+        "accession": "0000320193-26-000070",
+        "source": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000070/aapl-20260628.htm",
+        "retrieval_iso": "2026-07-02",
+        "source_title": "Apple FY2026 Q3 Form 10-Q",
+        "tier": "A",
+        "published_iso": "2026-07-02"
+      },
+      {
+        "metric": "Stale Revenue",
+        "value": "$89.5B",
+        "period": "FY2025 Q4",
+        "filing_type": "10-K",
+        "filing_date": "2025-10-31",
+        "accession": "0000320193-25-000090",
+        "source": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000090/aapl-20250927.htm",
+        "retrieval_iso": "2026-01-01",
+        "source_title": "Apple FY2025 Form 10-K stale",
+        "tier": "A",
+        "published_iso": "2026-01-01"
+      }
+    ],
+    "macro": [
+      {
+        "indicator": "Fed Funds Rate",
+        "value": "5.25%",
+        "source": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+        "retrieval_iso": "2026-07-01",
+        "tier": "A",
+        "published_iso": "2026-07-01"
+      },
+      {
+        "indicator": "CPI YoY",
+        "value": "2.9%",
+        "source": "https://www.bls.gov/cpi/",
+        "retrieval_iso": "2026-06-25",
+        "tier": "A",
+        "published_iso": "2026-06-25"
+      },
+      {
+        "indicator": "10Y Treasury Yield",
+        "value": "4.18%",
+        "source": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates",
+        "retrieval_iso": "2026-07-02",
+        "tier": "A",
+        "published_iso": "2026-07-02"
+      },
+      {
+        "indicator": "Unemployment Rate",
+        "value": "3.8%",
+        "source": "https://www.bls.gov/news.release/empsit.toc.htm",
+        "retrieval_iso": "2026-04-15",
+        "source_title": "BLS Unemployment (tier-A over 30d macro budget -> flagged)",
+        "tier": "A",
+        "published_iso": "2026-04-15"
+      },
+      {
+        "indicator": "PMI Manufacturing",
+        "value": "50.2",
+        "source": "https://www.marketwatch.com/pmi",
+        "retrieval_iso": "2026-04-10",
+        "source_title": "MarketWatch PMI (tier-B over 30d macro budget -> dropped)",
+        "tier": "B",
+        "published_iso": "2026-04-10"
+      }
+    ],
+    "forward_range": [
+      {
+        "label": "bear",
+        "low": 175.0,
+        "high": 195.0,
+        "probability": 0.2,
+        "evidence_count": 2,
+        "url": "https://www.morganstanley.com/research/aapl-bear",
+        "retrieval_iso": "2026-06-20",
+        "source_title": "Morgan Stanley AAPL Bear Case",
+        "tier": "A",
+        "published_iso": "2026-06-20"
+      },
+      {
+        "label": "base",
+        "low": 210.0,
+        "high": 230.0,
+        "probability": 0.55,
+        "evidence_count": 5,
+        "url": "https://www.goldmansachs.com/insights/aapl-base",
+        "retrieval_iso": "2026-06-25",
+        "source_title": "Goldman Sachs AAPL Base Case",
+        "tier": "A",
+        "published_iso": "2026-06-25"
+      },
+      {
+        "label": "bull",
+        "low": 235.0,
+        "high": 260.0,
+        "probability": 0.25,
+        "evidence_count": 3,
+        "url": "https://www.jpmorgan.com/research/aapl-bull",
+        "retrieval_iso": "2026-06-28",
+        "source_title": "JPMorgan AAPL Bull Case",
+        "tier": "A",
+        "published_iso": "2026-06-28"
+      },
+      {
+        "label": "stale_bull",
+        "low": 240.0,
+        "high": 270.0,
+        "probability": 0.1,
+        "evidence_count": 1,
+        "url": "https://www.goldmansachs.com/insights/aapl-stale",
+        "retrieval_iso": "2026-01-15",
+        "source_title": "Goldman Sachs AAPL Stale Bull (tier-A over 90d -> flagged)",
+        "tier": "A",
+        "published_iso": "2026-01-15"
+      },
+      {
+        "label": "stale_bear",
+        "low": 160.0,
+        "high": 180.0,
+        "probability": 0.1,
+        "evidence_count": 1,
+        "url": "https://www.fool.com/aapl-stale-bear",
+        "retrieval_iso": "2026-02-01",
+        "source_title": "Motley Fool AAPL Stale Bear (tier-B over 90d -> dropped)",
+        "tier": "B",
+        "published_iso": "2026-02-01"
+      }
+    ],
+    "user_qa_sources": [
+      {
+        "url": "https://www.reuters.com/technology/aapl-q3-shipments",
+        "retrieval_iso": "2026-07-03",
+        "source_title": "Reuters AAPL Q3 shipment data",
+        "tier": "A",
+        "published_iso": "2026-07-03"
+      },
+      {
+        "url": "https://www.cnbc.com/2026/07/01/aapl-china-down-yoy",
+        "retrieval_iso": "2026-07-01",
+        "source_title": "CNBC AAPL China revenue",
+        "tier": "A",
+        "published_iso": "2026-07-01"
+      },
+      {
+        "url": "https://www.fool.com/aapl-q2-earnings",
+        "retrieval_iso": "2026-05-10",
+        "source_title": "Motley Fool AAPL Q2 (tier-B over 7d -> dropped)",
+        "tier": "B",
+        "published_iso": "2026-05-10"
+      }
+    ]
+  },
+  "user_qa_answers": {
+    "Why did it drop in March 2026?": "not_found_in_budget -- no in-budget sources for March 2026 retrieved.",
+    "What is the current 10Y yield?": "Per the U.S. Treasury, the 10-year yield was 4.18% on 2026-07-02.",
+    "Describe the macro backdrop.": "Macro: Fed Funds 5.25% (FRED, 2026-07-01); CPI 2.9% (BLS, 2026-06-25); 10Y 4.18% (Treasury, 2026-07-02)."
+  }
+}

@@ -6,9 +6,9 @@ Usage:
     python3 tradingAgents/run_skill.py show <run-id>
     python3 tradingAgents/run_skill.py doctor <run-id> [--deep]
 
-In a real harness this is invoked by the Claude Code or Codex loader. Here it
-is driven against an in-fixture evidence set so the full pipeline can be
-exercised end-to-end.
+In a real harness this is invoked by the Claude Code or Codex loader after the
+agent performs fresh web/source retrieval. The local `run-fixture` subcommand is
+test-only and uses bundled deterministic evidence.
 """
 from __future__ import annotations
 import argparse
@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 RUNTIME = ROOT / ".stock-research"
-FIXTURES = ROOT / ".claude" / "skills" / "stock-research" / "fixtures"
+FIXTURES = ROOT / "src" / "skills" / "stock-research" / "fixtures"
 
 sys.path.insert(0, str(ROOT))
 # Also expose the parent dir so `tradingAgents` resolves whether invoked from
@@ -43,6 +43,10 @@ def main(argv=None):
     pr.add_argument("ticker")
     pr.add_argument("questions", nargs="*")
 
+    pf = sub.add_parser("run-fixture")
+    pf.add_argument("ticker")
+    pf.add_argument("questions", nargs="*")
+
     ps = sub.add_parser("show")
     ps.add_argument("run_id")
 
@@ -52,7 +56,16 @@ def main(argv=None):
 
     args = p.parse_args(argv)
     if args.cmd == "run":
-        bundle = _impl.run(args.ticker.upper(), args.questions, FIXTURES, RUNTIME)
+        bundle = _impl.run(args.ticker.upper(), args.questions, RUNTIME)
+        out = {
+            "ticker": bundle["ticker"],
+            "run_id": bundle["run_id"],
+            "path": str(_impl.last_path()),
+            "status": bundle["status"],
+        }
+        print(json.dumps(out, indent=2))
+    elif args.cmd == "run-fixture":
+        bundle = _impl.run_fixture(args.ticker.upper(), args.questions, FIXTURES, RUNTIME)
         out = {
             "ticker": bundle["ticker"],
             "run_id": bundle["run_id"],

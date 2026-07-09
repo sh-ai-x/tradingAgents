@@ -1,0 +1,106 @@
+"""fair_value worker.
+
+Computes point + +/- band independently from per-source fair-value estimates,
+cross-checks against forward_range midpoint, applies +/-10% tier-A conflict
+rule, and emits low_confidence / bracket / synthesis modes.
+"""
+from __future__ import annotations
+from typing import Any
+from lib.citation import MissingPublicationDate, format_citation, source_date_iso
+from lib.recency import check as recency_check, BUDGETS
+from lib.conflict import is_in_conflict, tier_bracket, weighted_synthesis
+
+def run(estimates, today_iso):
+    """estimates = [{"value": float, "url": str, "published_iso": str,
+                     "retrieval_iso": str, "source_title": str,
+                     "tier": "A"|"B"|"C"}]"""
+    citations = []
+    kept_a = []
+    kept_b = []
+    recency_log = []
+    for est in estimates:
+        tier = est["tier"]
+        try:
+            date_iso = source_date_iso(est)
+        except MissingPublicationDate as exc:
+            recency_log.append({"source": est.get("url", ""),
+                                "tier": tier,
+                                "action": "missing_published_iso",
+                                "reason": str(exc)})
+            continue
+        rr = recency_check("fair_value", tier, date_iso, today_iso)
+        if rr.action == "drop":
+            recency_log.append({"source": est["url"], "age_days": rr.age_days,
+                                "budget_days": rr.budget_days, "tier": tier,
+                                "action": "drop"})
+            continue
+        if rr.action == "flag":
+            # Tier-A over budget: keep but tag display tier as C; flag emitted
+            # in the recency_log so the doctor can audit it.
+            display_tier = "C"
+            recency_log.append({"source": est["url"], "age_days": rr.age_days,
+                                "budget_days": rr.budget_days, "tier": tier,
+                                "action": "flag",
+                                "flag": rr.flag,
+                                "original_tier": tier,
+                                "display_tier": display_tier})
+            cit = format_citation(est["url"], date_iso, est["source_title"], display_tier)
+            citations.append(cit)
+            # Tier-A over-budget sources do NOT contribute to kept_a (we treat
+            # them as advisory). This prevents stale tier-A from diluting the
+            # synthesis.
+            continue
+        cit = format_citation(est["url"], date_iso, est["source_title"], tier)
+        citations.append(cit)
+        if tier == "A":
+            kept_a.append(est["value"])
+        elif tier == "B":
+            kept_b.append(est["value"])
+
+    low_confidence = len(kept_a) == 0
+    all_kept = kept_a + kept_b
+    if not all_kept:
+        return {
+            "point": 0.0, "band_low": 0.0, "band_high": 0.0,
+            "synthesis_target": 0.0, "mode": "bracket",
+            "tier_bracket": [], "conflict": False, "low_confidence": True,
+            "citations": [], "reasoning_trace": "not_found_in_budget",
+            "recency_log": recency_log,
+            "recency_violated_citations": [e["source"] for e in recency_log if e.get("action") == "flag"],
+        }
+
+    synthesis_target = sum(all_kept) / len(all_kept)
+    if kept_a and is_in_conflict(kept_a):
+        lo, hi = tier_bracket(kept_a)
+        return {
+            "point": (lo + hi) / 2, "band_low": lo, "band_high": hi,
+            "synthesis_target": synthesis_target, "mode": "bracket",
+            "tier_bracket": [str(x) for x in kept_a], "conflict": True,
+            "low_confidence": False, "citations": citations,
+            "reasoning_trace": f"tier-A disagreement > +/-10% -- bracket [{lo},{hi}]",
+            "recency_log": recency_log,
+            "recency_violated_citations": [e["source"] for e in recency_log if e.get("action") == "flag"],
+        }
+    if low_confidence:
+        lo, hi = min(all_kept), max(all_kept)
+        return {
+            "point": (lo + hi) / 2, "band_low": lo, "band_high": hi,
+            "synthesis_target": synthesis_target, "mode": "bracket",
+            "tier_bracket": [], "conflict": False, "low_confidence": True,
+            "citations": citations,
+            "reasoning_trace": "no tier-A sources -- bracket [min,max] of cited",
+            "recency_log": recency_log,
+            "recency_violated_citations": [e["source"] for e in recency_log if e.get("action") == "flag"],
+        }
+    # Synthesized path: weighted synthesis (tier-A weight 3, tier-B weight 1).
+    weighted = [(v, 3.0) for v in kept_a] + [(v, 1.0) for v in kept_b]
+    pt = weighted_synthesis(weighted)
+    half_band = max(abs(pt - min(all_kept)), abs(max(all_kept) - pt))
+    return {
+        "point": pt, "band_low": pt - half_band, "band_high": pt + half_band,
+        "synthesis_target": synthesis_target, "mode": "synthesized",
+        "tier_bracket": [str(x) for x in kept_a], "conflict": False,
+        "low_confidence": False, "citations": citations,
+        "reasoning_trace": "tier-A within +/-10%, weighted synthesis",
+        "recency_log": recency_log,
+    }

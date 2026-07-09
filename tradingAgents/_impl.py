@@ -11,7 +11,7 @@ TODAY_ISO = "2026-07-07T10:15:00Z"
 _LAST_PATH: Path | None = None
 
 def _skill_root() -> Path:
-    return Path(__file__).resolve().parent / ".claude" / "skills" / "stock-research"
+    return Path(__file__).resolve().parent / "src" / "skills" / "stock-research"
 
 def _ensure_skill_path() -> None:
     root = _skill_root()
@@ -44,7 +44,15 @@ def _user_qa_input(questions, fx, inputs):
                     "budget_type": "drivers"})
     return out
 
-def run(ticker: str, questions: list[str], fixtures: Path, runtime: Path) -> dict[str, Any]:
+def run(ticker: str, questions: list[str], runtime: Path) -> dict[str, Any]:
+    raise RuntimeError(
+        "stock-research run requires fresh web/source retrieval for this ticker. "
+        "The local CLI cannot perform host web search directly; invoke the "
+        "Codex/Claude skill so the agent searches live sources, or use "
+        "`run-fixture` only for deterministic tests."
+    )
+
+def run_fixture(ticker: str, questions: list[str], fixtures: Path, runtime: Path) -> dict[str, Any]:
     _ensure_skill_path()
     from workers import head_manager
     fx = _load_fixtures(fixtures)
@@ -54,6 +62,7 @@ def run(ticker: str, questions: list[str], fixtures: Path, runtime: Path) -> dic
         today_iso=TODAY_ISO,
         fair_value_inputs=inputs.get("fair_value", []),
         drivers_inputs=inputs.get("drivers", []),
+        fundamentals_inputs=inputs.get("fundamentals", []),
         macro_inputs=inputs.get("macro", []),
         forward_range_inputs=inputs.get("forward_range", []),
         user_qas_inputs=_user_qa_input(questions, fx, inputs),
