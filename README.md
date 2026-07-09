@@ -35,6 +35,32 @@ Example prompt:
 /stock-research NVDA "What changed this week?" "What are the key risks?"
 ```
 
+Multiple tickers can be requested in one run when you want a comparative
+ranking:
+
+```text
+/stock-research MU SNDK NVDA "Compare 6-month upside, downside risk, and evidence quality."
+```
+
+Expected reader-facing output starts with tables before the written analysis.
+For example:
+
+```text
+Summary Ranking Table
+| ticker | rank | current price | fair value band | upside band probability | risk-adjusted score | research action |
+| MU     | 1    | 938.38 USD    | 980-1,080       | 42%                     | 78                  | prioritize deeper due diligence |
+| NVDA   | 2    | 154.20 USD    | 150-180         | 35%                     | 74                  | watch for confirmation |
+| SNDK   | 3    | 65.10 USD     | 58-72           | 24%                     | 61                  | monitor key risk before action |
+
+Band Probability Table
+| ticker | downside band | neutral band | upside band | implied return range | return/risk |
+| MU     | 830-900 / 25% | 900-1,000 / 33% | 1,000-1,120 / 42% | -12% to +19% | 1.8x |
+```
+
+The exact numbers depend on current sources gathered during the run. The skill
+keeps citations and recency/conflict flags with the bundle so the result can be
+audited later.
+
 For local deterministic testing, use the fixture runner:
 
 ```sh
@@ -42,8 +68,18 @@ cd tradingAgents
 python3 run_skill.py run-fixture AAPL "Why did it drop in March 2026?"
 ```
 
-The command prints a compact JSON pointer with the ticker, run id, output path,
-and status. Use that run id with:
+The fixture command prints a compact JSON pointer like:
+
+```json
+{
+  "ticker": "AAPL",
+  "run_id": "2026-07-07T10-15-00Z_AAPL",
+  "path": "tradingAgents/.stock-research/AAPL/2026-07-07T10-15-00Z_AAPL.json",
+  "status": "ok"
+}
+```
+
+Use that run id with:
 
 ```sh
 python3 run_skill.py show <run-id>

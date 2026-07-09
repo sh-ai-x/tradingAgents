@@ -24,15 +24,29 @@ artifacts and are not part of the public repository.
 
 ## Quickstart
 
+Live research runs are intended to be invoked through the Claude Code or Codex
+skill host so the agent can perform fresh web/source retrieval.
+
+```text
+/stock-research NVDA "What changed this week?" "What are the key risks?"
+```
+
+Multiple tickers can be requested together for comparative ranking:
+
+```text
+/stock-research MU SNDK NVDA "Compare 6-month upside, downside risk, and evidence quality."
+```
+
+Expected output is table-first and includes summary ranking, probability bands,
+implied return ranges, return/risk ratio, citations, and recency/conflict flags.
+
+For local deterministic testing, use the fixture runner:
+
 ```sh
 python3 tradingAgents/run_skill.py run-fixture AAPL "Why did it drop in March 2026?"
 python3 tradingAgents/run_skill.py show <run-id>
 python3 tradingAgents/run_skill.py doctor <run-id> --deep
 ```
-
-Live research runs are intended to be invoked through the Claude Code or Codex
-skill host so the agent can perform fresh web/source retrieval. The local
-`run-fixture` command is deterministic and intended for tests.
 
 ## Disclaimer
 
