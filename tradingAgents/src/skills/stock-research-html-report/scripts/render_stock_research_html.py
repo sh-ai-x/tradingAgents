@@ -248,12 +248,9 @@ def build_references_by_ticker(data):
     sections = []
     for ticker in known_tickers:
         rows = []
-        ticker_refs = [(ref, "ticker-specific") for ref in grouped.get(ticker, [])]
-        shared_refs = [(ref, "shared") for ref in shared]
-        for ref, scope in ticker_refs + shared_refs:
+        for ref in grouped.get(ticker, []) + shared:
             link = f"<a href='{esc(ref['url'])}'>{esc(ref['title'])}</a>" if ref["url"] else esc(ref["title"])
             rows.append([
-                esc(scope),
                 link,
                 esc(ref["domain"]),
                 esc(ref["published"]),
@@ -262,7 +259,7 @@ def build_references_by_ticker(data):
                 esc(grade(ref["score"])),
                 esc(ref["used_in"]),
             ])
-        sections.append(f"<div class='ref-group'><h3>{esc(ticker)}</h3>{table(['Scope', 'Source', 'Domain', 'Published', 'Tier', 'Ref. confidence', 'Grade', 'Used in'], rows, 'No references found in bundle.')}</div>")
+        sections.append(f"<div class='ref-group'><h3>{esc(ticker)}</h3>{table(['Source', 'Domain', 'Published', 'Tier', 'Ref. confidence', 'Grade', 'Used in'], rows, 'No references found in bundle.')}</div>")
 
     if shared:
         rows = []

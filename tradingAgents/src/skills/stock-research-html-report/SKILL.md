@@ -56,8 +56,7 @@ python3 src/skills/stock-research-html-report/scripts/render_stock_research_html
   never hide it in prose only.
 - Show references by ticker. Each ticker section must include direct
   ticker-specific references plus shared market, macro, or sector references
-  that were used for the multi-ticker thesis. Label whether each row is
-  `ticker-specific` or `shared`.
+  that were used for the multi-ticker thesis.
 - Prefer local-market source mix by ticker. For U.S.-listed tickers such as
   `MU`, `SNDK`, `WDC`, and `LITE`, prioritize U.S. company IR, SEC filings,
   U.S. broker/newswire/market sources, and U.S. analyst coverage. For
