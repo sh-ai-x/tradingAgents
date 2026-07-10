@@ -1,7 +1,7 @@
 {
   "name": "trading-agents",
   "version": "1.0.0",
-  "description": "Shared stock-research skill package for Claude Code and Codex.",
+  "description": "Shared stock-research and HTML report skill package for Claude Code and Codex.",
   "author": {
     "name": "tradingAgents"
   },
@@ -16,8 +16,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Trading Agents",
-    "shortDescription": "Evidence-backed stock research skill.",
-    "longDescription": "Shared Claude Code and Codex skill package for evidence-backed stock research bundles.",
+    "shortDescription": "Evidence-backed stock research and HTML reports.",
+    "longDescription": "Shared Claude Code and Codex skill package for evidence-backed stock research bundles, quality scoring, and local HTML report rendering.",
     "developerName": "tradingAgents",
     "category": "Productivity",
     "capabilities": [
@@ -28,7 +28,8 @@
     "defaultPrompt": [
       "Run stock research for AAPL.",
       "Show the latest stock-research bundle.",
-      "Doctor a saved stock-research run."
+      "Doctor a saved stock-research run.",
+      "Render the latest stock-research bundle as HTML."
     ],
     "brandColor": "#2563EB"
   }
