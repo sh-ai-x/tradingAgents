@@ -1,6 +1,6 @@
 {
   "name": "trading-agents",
-  "version": "1.0.0",
+  "version": "1.0.0+codex.20260711101916",
   "description": "Shared stock-research and HTML report skill package for Claude Code and Codex.",
   "author": {
     "name": "tradingAgents"
