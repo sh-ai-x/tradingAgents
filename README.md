@@ -34,6 +34,51 @@ ranking row does not repeat them.
 Live research should be run through Claude Code or Codex so the agent can
 perform fresh web/source retrieval during the run.
 
+## Plugin Skills
+
+The `trading-agents` plugin provides all three skills below.
+
+### `trading-agents:stock-research`
+
+Run fresh, evidence-backed research for one or more tickers. It retrieves
+current sources, enforces publication-date and source-coverage rules, records
+yfinance price context, builds valuation and six-month scenario outputs, and
+persists the research bundle under `.stock-research/`.
+
+```text
+$trading-agents:stock-research MU SNDK
+```
+
+The skill also supports saved-run operations:
+
+```text
+/stock-research show <run-id>
+/stock-research doctor <run-id>
+/stock-research doctor <run-id> --deep
+```
+
+### `trading-agents:stock-quality-factors`
+
+Add the decision-quality layer used by stock research: reliability, economic
+moat, structural stability, growth quality, risk-adjusted score, reference
+confidence, and aggregate analysis confidence. This is normally loaded
+automatically as the companion to `stock-research`; it does not produce
+buy/sell/hold advice or replace the research skill's valuation outputs.
+
+```text
+$trading-agents:stock-quality-factors
+```
+
+### `trading-agents:stock-research-html-report`
+
+Post-process the latest or explicitly selected stock-research bundle into
+reader-facing report artifacts while preserving completed, partial, halted,
+coverage-warning, and missing-evidence states.
+
+```text
+$trading-agents:stock-research-html-report
+```
+
 Example prompt:
 
 ```text
