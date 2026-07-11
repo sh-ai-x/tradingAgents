@@ -68,16 +68,15 @@ audited later.
 
 ## JSON, HTML, and PDF Reports
 
-The local `stock-research-html-report` skill builds a complete artifact set in
-one command:
+Use the `stock-research-html-report` capability from the `trading-agents`
+plugin after a research run. In Codex, invoke the plugin skill directly:
 
-```sh
-python3 ~/.codex/skills/stock-research-html-report/scripts/build_report_bundle.py \
-  .stock-research/<TICKER>/<run>.json
+```text
+$trading-agents:stock-research-html-report
 ```
 
-When the input path is omitted, the command selects the newest source JSON
-under `.stock-research/`. It creates three sibling files:
+The plugin selects the newest source JSON under `.stock-research/` unless a
+specific bundle is supplied. A single invocation creates three sibling files:
 
 - `<run>.report.json` — normalized source bundle plus generation metadata
 - `<run>.report.html` — self-contained, table-first browser report
@@ -89,11 +88,10 @@ available current prices, declared reference/domain counts, exact shortfalls,
 omitted outputs, attempted retrieval lanes, and rejection reasons. Rankings or
 scores that were not synthesized are labeled `not computed`.
 
-The command verifies that all three artifacts exist and that the PDF is
+The plugin verifies that all three artifacts exist and that the PDF is
 non-empty with a valid `%PDF-` signature. Its successful warning state is
 `complete_with_coverage_warnings` when artifacts were generated but the
-research coverage floor was not met. Use `--strict-coverage` only when callers
-also need a nonzero exit status for that warning.
+research coverage floor was not met.
 
 For local deterministic testing, use the fixture runner:
 
@@ -136,8 +134,8 @@ Important project paths:
   scoring contract
 - `tradingAgents/src/skills/stock-research/workers/` - worker implementation
 - `tradingAgents/run_skill.py` - local fixture/show/doctor CLI
-- `~/.codex/skills/stock-research-html-report/` - local one-command JSON, HTML,
-  and PDF report pipeline
+- `tradingAgents/src/skills/stock-research-html-report/` - plugin capability for
+  one-command JSON, HTML, and PDF report generation
 
 ## Disclaimer
 
