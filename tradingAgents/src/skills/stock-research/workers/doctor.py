@@ -10,11 +10,38 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from jsonschema import validate, ValidationError  # type: ignore
 from lib.citation import parse_citation, format_citation
 from lib.recency import BUDGETS
 from lib.tier import classify as classify_tier
 from lib.schema import BUNDLE_SCHEMA
+
+def _check_evidence_coverage(bundle: dict[str, Any]) -> list[str]:
+    """Require >=10 persisted, ticker-assigned references and >=5 domains per ticker."""
+    errors = []
+    tickers = bundle.get("tickers") or ([bundle.get("ticker")] if bundle.get("ticker") else [])
+    refs = bundle.get("reference_confidence_table") or bundle.get("citations") or []
+    for ticker in tickers:
+        assigned = []
+        for ref in refs:
+            explicit = ref.get("tickers", ref.get("ticker", []))
+            if isinstance(explicit, str):
+                explicit = [explicit]
+            # Single-ticker legacy bundles may omit assignment.
+            if ticker in explicit or (len(tickers) == 1 and not explicit):
+                assigned.append(ref)
+        urls = {ref.get("url") for ref in assigned if ref.get("url")}
+        domains = {
+            ref.get("domain") or urlparse(ref.get("url", "")).netloc
+            for ref in assigned
+            if ref.get("url") in urls and (ref.get("domain") or urlparse(ref.get("url", "")).netloc)
+        }
+        if len(urls) < 10:
+            errors.append(f"{ticker}: persisted reference coverage {len(urls)}/10")
+        if len(domains) < 5:
+            errors.append(f"{ticker}: persisted domain coverage {len(domains)}/5")
+    return errors
 
 def _check_recency(bundle: dict[str, Any]) -> list[str]:
     errors = []
@@ -105,6 +132,7 @@ def run(bundle: dict[str, Any], deep: bool = False) -> dict[str, Any]:
     errors += _check_recency(bundle)
     errors += _check_independence(bundle)
     errors += _check_citations(bundle)
+    errors += _check_evidence_coverage(bundle)
     errors += _check_schema(bundle)
     if deep:
         progress = ["[1/5] recency", "[2/5] independence", "[3/5] citations",

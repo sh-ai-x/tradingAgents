@@ -3,6 +3,7 @@ import argparse
 from datetime import datetime, timezone
 import html
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -170,6 +171,46 @@ def table(headers, rows, empty="Not found in bundle."):
     return f"<div class='table-wrap'><table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>"
 
 
+def prose(value):
+    """Render nested narrative data without losing detail; link explicit URLs."""
+    if value in (None, "", [], {}):
+        return "<p class='empty'>Not found in bundle.</p>"
+    if isinstance(value, dict):
+        blocks = []
+        for key, child in value.items():
+            title = str(key).replace("_", " ").title()
+            blocks.append(f"<div class='narrative-block'><h4>{esc(title)}</h4>{prose(child)}</div>")
+        return "".join(blocks)
+    if isinstance(value, list):
+        return "<ul>" + "".join(f"<li>{prose(item)}</li>" for item in value) + "</ul>"
+    safe = esc(value)
+    safe = re.sub(
+        r"(https?://[^\s&lt;&gt;]+)",
+        lambda match: f"<a href='{match.group(1)}'>{match.group(1)}</a>",
+        safe,
+    )
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", safe) if part.strip()]
+    return "".join(f"<p>{part.replace(chr(10), '<br>')}</p>" for part in paragraphs)
+
+
+def build_detailed_analysis(data):
+    detail = data.get("detailed_analysis")
+    if not isinstance(detail, dict):
+        return "<p class='empty'>Not found in bundle. Detailed analysis is required for a full report.</p>"
+    sections = []
+    ordered = [
+        ("executive_summary", "Executive Summary"),
+        ("methodology", "Research Methodology"),
+        ("ticker_analyses", "Ticker-by-Ticker Analysis"),
+        ("comparative_analysis", "Comparative Analysis"),
+        ("scenario_methodology", "Scenario and Probability Methodology"),
+        ("limitations", "Limitations and Evidence Gaps"),
+    ]
+    for key, title in ordered:
+        sections.append(f"<section class='narrative'><h2>{title}</h2>{prose(detail.get(key))}</section>")
+    return "".join(sections)
+
+
 def build_summary_rows(data):
     prices = data.get("current_prices", {})
     rows = []
@@ -326,6 +367,80 @@ def coverage_failures(data):
     return failures
 
 
+def narrative_failures(data):
+    detail = data.get("detailed_analysis")
+    required_top = [
+        "executive_summary", "methodology", "ticker_analyses",
+        "comparative_analysis", "scenario_methodology", "limitations",
+    ]
+    required_ticker = [
+        "business_and_market_context", "current_setup", "bull_case", "base_case",
+        "bear_case", "fair_value_reasoning", "price_band_reasoning",
+        "quality_factor_reasoning", "positive_evidence",
+        "negative_and_contrary_evidence", "key_risks",
+        "catalysts_and_checkpoints", "evidence_gaps", "research_action_reasoning",
+    ]
+    if not isinstance(detail, dict):
+        return [{"field": "detailed_analysis", "reason": "missing"}]
+    failures = [
+        {"field": f"detailed_analysis.{key}", "reason": "missing_or_empty"}
+        for key in required_top if not detail.get(key)
+    ]
+    ticker_analyses = detail.get("ticker_analyses") or {}
+    known_urls = {
+        ref.get("url") for ref in (data.get("reference_confidence_table") or [])
+        if isinstance(ref, dict) and ref.get("url")
+    }
+
+    def validate_evidence_block(value, path):
+        block_failures = []
+        if not isinstance(value, dict):
+            return [{"field": path, "reason": "must_be_evidence_block"}]
+        if not value.get("text"):
+            block_failures.append({"field": f"{path}.text", "reason": "missing_or_empty"})
+        evidence = value.get("cited_evidence")
+        if not isinstance(evidence, list) or not evidence:
+            block_failures.append({"field": f"{path}.cited_evidence", "reason": "missing_or_empty"})
+        else:
+            for index, item in enumerate(evidence):
+                if not isinstance(item, dict):
+                    block_failures.append({"field": f"{path}.cited_evidence[{index}]", "reason": "must_be_object"})
+                    continue
+                url = item.get("url")
+                if not url:
+                    block_failures.append({"field": f"{path}.cited_evidence[{index}].url", "reason": "missing"})
+                elif url not in known_urls:
+                    block_failures.append({"field": f"{path}.cited_evidence[{index}].url", "reason": "not_in_reference_confidence_table"})
+                for key in ("published_iso", "source_title", "tier", "claim_supported"):
+                    if not item.get(key):
+                        block_failures.append({"field": f"{path}.cited_evidence[{index}].{key}", "reason": "missing"})
+        return block_failures
+
+    for ticker in data.get("tickers", []):
+        section = ticker_analyses.get(ticker)
+        if not isinstance(section, dict):
+            failures.append({"ticker": ticker, "field": "ticker_analyses", "reason": "missing"})
+            continue
+        for key in required_ticker:
+            if not section.get(key):
+                failures.append({"ticker": ticker, "field": key, "reason": "missing_or_empty"})
+                continue
+            value = section[key]
+            path = f"detailed_analysis.ticker_analyses.{ticker}.{key}"
+            if key == "quality_factor_reasoning":
+                if not isinstance(value, dict) or not value:
+                    failures.append({"ticker": ticker, "field": key, "reason": "missing_or_empty"})
+                else:
+                    for factor, explanation in value.items():
+                        failures.extend(validate_evidence_block(explanation, f"{path}.{factor}"))
+            else:
+                failures.extend(validate_evidence_block(value, path))
+    for key in ("comparative_analysis", "scenario_methodology"):
+        if detail.get(key):
+            failures.extend(validate_evidence_block(detail[key], f"detailed_analysis.{key}"))
+    return failures
+
+
 def render(data, source_path):
     title = data.get("title") or "Stock Research HTML Report"
     tickers = ", ".join(data.get("tickers", []))
@@ -366,6 +481,7 @@ def render(data, source_path):
         action_rows,
     )
     analysis = data.get("analysis") or data.get("coverage_note") or "Research-only output. Not investment advice."
+    detailed_analysis = build_detailed_analysis(data)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -381,6 +497,7 @@ def render(data, source_path):
     h1 {{ margin:0 0 8px; font-size:28px; line-height:1.2; letter-spacing:0; }}
     h2 {{ margin:28px 0 10px; font-size:18px; }}
     h3 {{ margin:16px 0 8px; font-size:15px; }}
+    h4 {{ margin:14px 0 6px; font-size:14px; color:#27364a; }}
     .meta {{ display:flex; flex-wrap:wrap; gap:8px; color:var(--muted); }}
     .pill {{ border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:4px 10px; }}
     .warn {{ color:var(--warn); border-color:#e8c16a; background:#fff8e6; }}
@@ -389,6 +506,12 @@ def render(data, source_path):
     .status.fail {{ color:#82071e; background:#ffebe9; }}
     .panel {{ background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }}
     .ref-group {{ margin:0 0 16px; }}
+    .narrative {{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin-top:20px; }}
+    .narrative h2 {{ margin-top:0; }}
+    .narrative-block {{ margin:12px 0 18px; padding-left:14px; border-left:3px solid #dbe7ff; }}
+    .narrative p {{ margin:7px 0 12px; line-height:1.72; }}
+    .narrative ul {{ margin:6px 0 12px; padding-left:24px; }}
+    .narrative li {{ margin:5px 0; }}
     .table-wrap {{ overflow:auto; border:1px solid var(--line); border-radius:8px; background:var(--panel); }}
     table {{ width:100%; border-collapse:collapse; min-width:760px; }}
     th, td {{ padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }}
@@ -420,6 +543,7 @@ def render(data, source_path):
     <section><h2>References By Ticker</h2>{references_by_ticker}</section>
     <section><h2>Action Guidance</h2>{actions}</section>
     <section><h2>Analysis</h2><div class="panel">{esc(analysis)}</div></section>
+    {detailed_analysis}
     <footer>Research only. Not investment advice.</footer>
   </main>
 </body>
@@ -435,12 +559,16 @@ def main():
     args = parser.parse_args()
     data = json.loads(args.input.read_text(encoding="utf-8"))
     output = args.output or args.input.with_suffix(".html")
+    failures = coverage_failures(data)
+    narrative = narrative_failures(data)
+    if failures or narrative:
+        print(json.dumps({
+            "coverage_failures": failures,
+            "detailed_analysis_failures": narrative,
+        }, indent=2), flush=True)
+        raise SystemExit(2)
     output.write_text(render(data, args.input), encoding="utf-8")
     print(output)
-    failures = coverage_failures(data)
-    if args.strict_coverage and failures:
-        print(json.dumps({"coverage_failures": failures}, indent=2), flush=True)
-        raise SystemExit(2)
 
 
 if __name__ == "__main__":

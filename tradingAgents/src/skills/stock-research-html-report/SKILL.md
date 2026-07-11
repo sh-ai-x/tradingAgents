@@ -17,6 +17,8 @@ Use this as a post-processing skill. Do not modify the original
    - If the previous assistant answer has not been saved as JSON yet, first
      create or update a JSON bundle under `.stock-research/` and include the
      displayed tables, citations, halt flags, and current prices.
+   - Never create a shortened representative-reference bundle. Copy every
+     eligible ticker-specific reference from the research result.
 
 2. Classify the source data into report sections.
    - `metadata`: status, retrieval time, tickers, halt flags.
@@ -30,6 +32,10 @@ Use this as a post-processing skill. Do not modify the original
      tickers it supports.
    - `action_guidance`: research workflow actions.
    - `analysis`: concise narrative, caveats, and disclaimer.
+   - `detailed_analysis`: executive summary, methodology, ticker-by-ticker
+     theses and counter-theses, valuation and price-band reasoning, quality
+     score explanations, risks, catalysts, evidence gaps, comparative analysis,
+     scenario methodology, and limitations.
 
 3. Render HTML with the bundled script:
 
@@ -52,8 +58,12 @@ python3 src/skills/stock-research-html-report/scripts/render_stock_research_html
 - Keep citations as clickable source links when URLs are present.
 - Show reference coverage by ticker before the reference tables. The default
   floor is at least 10 cited references, at least 5 distinct domains, and dates
-  within 7 days of `retrieval_iso`. Mark any shortfall as failed coverage;
-  never hide it in prose only.
+  within 7 days of `retrieval_iso`. This is a hard per-ticker render gate, not
+  a whole-report aggregate. Refuse successful rendering when any ticker fails;
+  report the exact missing count and return to stock-research retrieval.
+- Render all qualifying references for every ticker. Never truncate to a
+  representative subset, even when the same references were summarized in the
+  conversational answer.
 - Show references by ticker. Each ticker section must include direct
   ticker-specific references plus shared market, macro, or sector references
   that were used for the multi-ticker thesis.
@@ -67,6 +77,25 @@ python3 src/skills/stock-research-html-report/scripts/render_stock_research_html
 - Keep HTML self-contained: inline CSS, no network assets, no JavaScript
   dependency.
 - Use readable table-first layout for multi-ticker runs.
+- After the tables, render the complete `detailed_analysis` payload. Prefer
+  multiple substantive paragraphs and labeled subsections over compressed
+  one-line summaries. Preserve lists and nested score explanations.
+- For every ticker, explain why each score and scenario differs from peers,
+  what evidence supports it, what contrary evidence weakens it, and what event
+  would change the assessment. Include citations as clickable links when the
+  narrative contains URLs.
+- Render each explanation with its own adjacent `Evidence` and, when present,
+  `Contrary evidence` list. Each evidence row must show source title,
+  publication date, tier, clickable URL, and the exact claim supported. A
+  detached references section does not satisfy this rule.
+- Require every substantive ticker narrative field and each nested
+  quality-factor explanation to use the `text`, `cited_evidence`,
+  `contrary_evidence`, and `reasoning_trace` structure defined by
+  stock-research. Fail rendering when `text` or `cited_evidence` is empty, or
+  when an evidence URL is absent from `reference_confidence_table`.
+- Do not manufacture detail. If a required narrative field is absent, show a
+  visible `Not found in bundle` message and treat the source bundle as
+  incomplete rather than silently producing a thin report.
 
 ## Script
 
@@ -78,7 +107,7 @@ python3 render_stock_research_html.py input.json --output report.html
 python3 render_stock_research_html.py input.json --strict-coverage
 ```
 
-Use `--strict-coverage` when the user explicitly requested the stock-research
-coverage floor. In strict mode, the renderer still writes the HTML report, but
-exits non-zero when any ticker has fewer than 10 recent references or fewer
-than 5 recent distinct domains.
+Coverage enforcement is strict by default. The renderer exits non-zero and
+does not write or replace the HTML report when any ticker has fewer than 10
+recent references or fewer than 5 recent distinct domains. `--strict-coverage`
+is retained as a compatibility alias.

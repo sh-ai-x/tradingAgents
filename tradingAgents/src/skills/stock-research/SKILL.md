@@ -111,9 +111,41 @@ For each ticker in a live `/stock-research <TICKER>` run, collect and persist an
   been found. Continue the iterative search procedure below until the floor is
   met or the eligible public source space has been exhaustively searched.
 - If exhaustive retrieval still yields fewer than 5 domains or 10 eligible
-  items, emit `status: "partial"`, add `[evidence_coverage_shortfall]` to
-  `halt_flags`, and record every attempted search term and source lane in
-  `not_found_in_budget`. Never backfill with older or undated sources.
+  items for any ticker, do not finalize, rank, persist, or render that ticker's
+  research as a completed run. Continue retrieval through every source lane
+  and query expansion. If the public eligible source space is genuinely
+  exhausted, emit a halted diagnostic only, add
+  `[evidence_coverage_shortfall]`, and record every attempted search term and
+  source lane in `not_found_in_budget`. Never backfill with older, duplicated,
+  syndicated, undated, or Tier-C sources.
+
+### Per-Ticker Ten-Reference Persistence Gate
+
+The minimum is **10 eligible references for each ticker**, not 10 for the
+whole run and not 10 collected only in worker scratch output.
+
+Before synthesis, persistence, ranking, HTML conversion, or final display:
+
+1. Build the final `reference_confidence_table` from the accepted evidence.
+2. Attach `ticker` or `tickers` to every reference row. Shared macro evidence
+   may list multiple tickers, but it counts once for each explicitly listed
+   ticker only.
+3. Deduplicate by canonical URL and underlying publication separately for each
+   ticker.
+4. Recompute the eligible reference count and distinct-domain count from the
+   actual persisted `reference_confidence_table`, not from search notes or a
+   worker summary.
+5. Require at least 10 eligible rows and 5 distinct domains for every ticker.
+6. Persist and render all eligible rows used to satisfy the gate. Never replace
+   them with a shorter representative-source table or truncate them for
+   readability.
+7. Run `doctor` against the exact final bundle. A coverage failure is a hard
+   completion failure: return the halted diagnostic and resume retrieval; do
+   not claim that the research report is complete.
+
+For a five-ticker run, the bundle must therefore contain at least 50
+ticker-reference assignments. A shared source can support more than one ticker
+only when each assignment is explicit and the claim genuinely applies to each.
 - Tier-C sources may be collected internally for exploration only, but must not
   count toward `domain_count`, `evidence_count`, or displayed support.
 
@@ -368,6 +400,8 @@ tables in this order:
    - reference confidence score
    - confidence grade
    - used in
+   - render every eligible reference that satisfies the per-ticker coverage
+     gate; never show only representative references
 
 5. **Action Guidance Table**
    - ticker
@@ -380,6 +414,89 @@ tables in this order:
 After the tables, write a concise integrated analysis explaining the rank order,
 the biggest disagreements in evidence, and the most important next evidence to
 verify. Keep the disclaimer short: research only, not investment advice.
+
+## Detailed HTML Narrative Payload
+
+When the bundle may be rendered as HTML or PDF, persist a
+`detailed_analysis` object. Do not rely on the conversational answer as the
+only source of explanation. Write complete, evidence-linked prose rather than
+one-line descriptions.
+
+Required fields:
+
+- `executive_summary`: explain the market regime, the central comparative
+  conclusion, and the most important limitations in at least three substantive
+  paragraphs.
+- `methodology`: explain the seven-day evidence window, tier policy,
+  independence and deduplication rules, fair-value method, scenario-probability
+  method, scoring method, ranking tie-breaks, and current-price limitations.
+- `ticker_analyses`: one object per ticker containing:
+  - `business_and_market_context`
+  - `current_setup`
+  - `bull_case`
+  - `base_case`
+  - `bear_case`
+  - `fair_value_reasoning`
+  - `price_band_reasoning`
+  - `quality_factor_reasoning` with separate explanations for reliability,
+    economic moat, structural stability, growth quality, risk-adjusted score,
+    and analysis confidence
+  - `positive_evidence`
+  - `negative_and_contrary_evidence`
+  - `key_risks`
+  - `catalysts_and_checkpoints`
+  - `evidence_gaps`
+  - `research_action_reasoning`
+- `comparative_analysis`: explain rank order, trade-offs, evidence conflicts,
+  and why similarly scored companies are ordered differently.
+- `scenario_methodology`: explain how overlapping bear/base/bull scenarios were
+  converted into mutually exclusive bands and how probabilities were assigned.
+- `limitations`: enumerate coverage, primary-fundamentals, current-price,
+  currency, target-price, and model-risk limitations that apply.
+
+Every ticker section must cite the relevant persisted references by URL or
+stable reference identifier. Aim for decision-useful detail: explain causal
+links and counterarguments, not merely repeat table cells. Never pad with
+generic company descriptions or invent unsupported facts.
+
+### Evidence Attached to Every Explanation
+
+Store every substantive narrative block as an evidence-bearing object:
+
+```json
+{
+  "text": "Detailed explanation of the claim, causal link, and uncertainty.",
+  "cited_evidence": [
+    {
+      "url": "https://...",
+      "published_iso": "YYYY-MM-DD",
+      "source_title": "...",
+      "tier": "A",
+      "claim_supported": "The exact portion of the explanation this supports"
+    }
+  ],
+  "contrary_evidence": [],
+  "reasoning_trace": "How the evidence leads to the interpretation"
+}
+```
+
+Apply this structure to business context, current setup, bull/base/bear cases,
+fair value, price bands, every quality-factor explanation, positive evidence,
+negative evidence, risks, catalysts, evidence gaps, research action,
+comparative conclusions, and scenario methodology. Method descriptions that
+state only the skill's rules may cite `method_rule` instead of an external URL.
+
+Rules:
+
+- Place evidence immediately next to the explanation it supports; do not rely
+  on a detached reference list alone.
+- Include `claim_supported` so the reader can see why the source is attached.
+- Use only rows already present in the final `reference_confidence_table`.
+- Include contrary evidence beside conclusions whenever it exists.
+- A substantive explanation with no `cited_evidence` must be labeled
+  `[unsupported_explanation]` and blocks final HTML/PDF completion.
+- Never attach a source merely because it mentions the company; it must support
+  the specific explanatory claim.
 
 ## Date Rules
 
@@ -500,10 +617,12 @@ conversation context from contaminating fresh research.
 
 ## Halt Conditions
 
-If any worker returns `halted` with a reason, the bundle is emitted as
-`status: "partial"` with the dropped outputs listed in `omitted_outputs` and
-each dropped output recorded in `halt_flags` with a flag string
-(e.g. `[macro_stale]`). The skill never refuses; it degrades explicitly.
+If any worker returns `halted` with a reason unrelated to reference coverage,
+the bundle is emitted as `status: "partial"` with the dropped outputs listed in
+`omitted_outputs`. Reference coverage is stricter: fewer than 10 eligible
+persisted references or 5 domains for any ticker blocks completed synthesis,
+ranking, and report rendering for that ticker. Emit a halted coverage
+diagnostic and continue retrieval when possible.
 
 ## Doctor
 
