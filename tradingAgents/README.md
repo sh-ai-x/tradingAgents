@@ -35,11 +35,42 @@ skill host so the agent can perform fresh web/source retrieval.
 Multiple tickers can be requested together for comparative ranking:
 
 ```text
-/stock-research MU SNDK NVDA "Compare 6-month upside, downside risk, and evidence quality."
+/stock-research MU SNDK NVDA "Compare 6-month price ranges, interval probabilities, and evidence quality."
 ```
 
-Expected output is table-first and includes summary ranking, probability bands,
-implied return ranges, return/risk ratio, citations, and recency/conflict flags.
+Expected output is table-first and includes summary ranking, non-overlapping
+price-band probabilities, implied return ranges, return/risk ratio, citations,
+and recency/conflict flags. A band probability is the probability that the
+6-month price finishes inside that exact interval; it is not an upside
+probability or a ranking input.
+
+Each live run searches iteratively until every ticker has at least 10 eligible
+references across at least 5 domains. Counted and displayed references must
+have a source-published date inside the inclusive 7-day window ending at the
+run retrieval time. If exhaustive search cannot meet the floor, the run stays
+honest: it emits a partial bundle with the attempted queries and coverage
+shortfall instead of backfilling older, undated, duplicated, or low-quality
+sources.
+
+## Local Plugin Development
+
+The repository marketplace at `../.agents/plugins/marketplace.json` exposes the
+plugin as `trading-agents@trading-agents-dev`. Codex installs a cached copy of a
+marketplace plugin, so editing `src/` does not hot-reload an already installed
+plugin or an existing conversation.
+
+For normal ChatGPT/Codex desktop development, update the local plugin source,
+restart the desktop app, and test in a new thread. For a deterministic CLI
+refresh, run:
+
+```sh
+./scripts/update-plugin.sh
+```
+
+The script temporarily adds a cachebuster, validates the plugin, reinstalls it
+from `trading-agents-dev`, restores `src/.codex-plugin/plugin.json`, and prints
+the installed version. It requires the `codex` CLI and the bundled
+`plugin-creator` system skill under `${CODEX_HOME:-$HOME/.codex}/skills`.
 
 ## HTML Reports
 
