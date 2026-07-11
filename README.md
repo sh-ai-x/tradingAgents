@@ -66,9 +66,34 @@ The exact numbers depend on current sources gathered during the run. The skill
 keeps citations and recency/conflict flags with the bundle so the result can be
 audited later.
 
-The HTML report renders the current-price section explicitly and falls back to
-derived fair-value bands plus action labels when the summary rows omit duplicate
-fields.
+## JSON, HTML, and PDF Reports
+
+The local `stock-research-html-report` skill builds a complete artifact set in
+one command:
+
+```sh
+python3 ~/.codex/skills/stock-research-html-report/scripts/build_report_bundle.py \
+  .stock-research/<TICKER>/<run>.json
+```
+
+When the input path is omitted, the command selects the newest source JSON
+under `.stock-research/`. It creates three sibling files:
+
+- `<run>.report.json` — normalized source bundle plus generation metadata
+- `<run>.report.html` — self-contained, table-first browser report
+- `<run>.report.pdf` — A4 Chromium rendering of the HTML
+
+Completed, partial, halted, diagnostic, and legacy bundles are supported. A
+coverage shortfall does not produce a blank report: the HTML and PDF show the
+available current prices, declared reference/domain counts, exact shortfalls,
+omitted outputs, attempted retrieval lanes, and rejection reasons. Rankings or
+scores that were not synthesized are labeled `not computed`.
+
+The command verifies that all three artifacts exist and that the PDF is
+non-empty with a valid `%PDF-` signature. Its successful warning state is
+`complete_with_coverage_warnings` when artifacts were generated but the
+research coverage floor was not met. Use `--strict-coverage` only when callers
+also need a nonzero exit status for that warning.
 
 For local deterministic testing, use the fixture runner:
 
@@ -111,6 +136,8 @@ Important project paths:
   scoring contract
 - `tradingAgents/src/skills/stock-research/workers/` - worker implementation
 - `tradingAgents/run_skill.py` - local fixture/show/doctor CLI
+- `~/.codex/skills/stock-research-html-report/` - local one-command JSON, HTML,
+  and PDF report pipeline
 
 ## Disclaimer
 

@@ -77,33 +77,40 @@ from `trading-agents-dev`, restores `src/.codex-plugin/plugin.json`, and prints
 the installed version. It requires the `codex` CLI and the bundled
 `plugin-creator` system skill under `${CODEX_HOME:-$HOME/.codex}/skills`.
 
-## HTML Reports
+## JSON, HTML, and PDF Reports
 
-Use `stock-research-html-report` after a research run when the output should be
-shown as a local browser report:
-
-```sh
-python3 src/skills/stock-research-html-report/scripts/render_stock_research_html.py .stock-research/<TICKER>/<run>.json
-```
-
-The renderer writes an HTML file next to the JSON bundle. It preserves partial
-run flags, displays the table-first ranking, and adds:
-
-- `Reference Coverage` - per ticker counts for recent references and distinct domains.
-- `Reference Confidence` - the full cited source table.
-- `References By Ticker` - direct ticker-specific references plus shared market, macro, or sector references used in the thesis.
-- `Current Price` - per-ticker yfinance quote context.
-- `Summary Ranking` - derived fair-value bands and action labels when the ranking row omits them.
-
-When a run must satisfy the stock-research coverage floor, use strict mode:
+Use the local `stock-research-html-report` skill after a research run to create
+all report formats together:
 
 ```sh
-python3 src/skills/stock-research-html-report/scripts/render_stock_research_html.py .stock-research/<TICKER>/<run>.json --strict-coverage
+python3 ~/.codex/skills/stock-research-html-report/scripts/build_report_bundle.py \
+  .stock-research/<TICKER>/<run>.json
 ```
 
-Strict mode still writes the HTML report, but exits non-zero if any ticker has
-fewer than 10 references from the last 7 days or fewer than 5 distinct recent
-domains.
+Omit the input path to select the newest `.stock-research/**/*.json` bundle.
+The pipeline writes three verified sibling artifacts:
+
+- `<run>.report.json` — normalized JSON with generation metadata
+- `<run>.report.html` — self-contained table-first report
+- `<run>.report.pdf` — A4 PDF rendered through Chromium
+
+The pipeline supports completed, partial, halted, diagnostic, and legacy
+bundles. Halted research is rendered as an explicit diagnostic instead of an
+empty report: available prices, reference coverage, exact shortfalls, omitted
+outputs, retrieval lanes, and rejection reasons remain visible. Unsynthesized
+rankings and scores are labeled `not computed`.
+
+Coverage failures produce `complete_with_coverage_warnings` after all artifacts
+are created. Use strict mode only when automation also requires a nonzero exit
+for a coverage warning:
+
+```sh
+python3 ~/.codex/skills/stock-research-html-report/scripts/build_report_bundle.py \
+  .stock-research/<TICKER>/<run>.json --strict-coverage
+```
+
+Before reporting success, the command verifies the JSON and HTML files, checks
+that the PDF is non-empty, and validates its `%PDF-` signature.
 
 For source mix, U.S.-listed tickers should prioritize U.S. IR, SEC filings,
 U.S. market/news sources, and U.S. analyst coverage. Korea-listed tickers should
