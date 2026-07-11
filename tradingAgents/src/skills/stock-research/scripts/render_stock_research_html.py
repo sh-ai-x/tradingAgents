@@ -678,19 +678,20 @@ def main():
     parser.add_argument("input", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--strict-coverage", action="store_true")
+    parser.add_argument("--allow-incomplete", action="store_true")
     args = parser.parse_args()
     data = json.loads(args.input.read_text(encoding="utf-8"))
     output = args.output or args.input.with_suffix(".html")
     failures = coverage_failures(data)
     narrative = narrative_failures(data)
-    if failures:
+    if failures and not args.allow_incomplete:
         print(json.dumps({
             "coverage_failures": failures,
             "detailed_analysis_failures": narrative,
         }, indent=2), flush=True)
         raise SystemExit(2)
     output.write_text(render(data, args.input), encoding="utf-8")
-    if narrative:
+    if narrative and not args.allow_incomplete:
         print(json.dumps({
             "coverage_failures": failures,
             "detailed_analysis_failures": narrative,

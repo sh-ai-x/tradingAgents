@@ -50,7 +50,7 @@ report.
 
 ## Plugin Skills
 
-The `trading-agents` plugin exposes three skills.
+The `trading-agents` plugin exposes one integrated skill.
 
 ### `trading-agents:stock-research`
 
@@ -76,7 +76,7 @@ Natural-language research questions can follow the tickers:
 $trading-agents:stock-research MU SNDK "Compare evidence quality, six-month ranges, and key downside risks."
 ```
 
-### `trading-agents:stock-quality-factors`
+### Integrated quality factors
 
 Add the companion decision-quality layer. It scores:
 
@@ -92,19 +92,14 @@ Add the companion decision-quality layer. It scores:
 multi-factor bundle. The companion does not alter fair value, scenario ranges,
 or cited facts, and it is not a standalone stock picker.
 
-```text
-$trading-agents:stock-quality-factors
-```
-
-### `trading-agents:stock-research-html-report`
+### Integrated reports
 
 Post-process the newest or explicitly selected research JSON into durable
 report artifacts. It preserves completed, partial, halted, coverage-warning,
 and missing-evidence states instead of hiding them.
 
-```text
-$trading-agents:stock-research-html-report
-```
+No second skill invocation is required; `stock-research` creates JSON, HTML,
+and PDF automatically after research and Doctor validation.
 
 ## Installation and Updates
 
@@ -160,11 +155,7 @@ Run a multi-ticker comparison:
 $trading-agents:stock-research MU SNDK NVDA "Compare price ranges, durability, and evidence quality."
 ```
 
-Render the newest saved result:
-
-```text
-$trading-agents:stock-research-html-report
-```
+The same invocation renders the saved result automatically.
 
 Typical outputs are written beneath `.stock-research/`. Runtime bundles and
 agent scratch files are local artifacts and should not be committed.
@@ -366,11 +357,8 @@ These labels describe the next evidence-gathering action, not a trade.
 
 ## JSON, HTML, and PDF Artifacts
 
-Invoke the reporting capability after research:
-
-```text
-$trading-agents:stock-research-html-report
-```
+Reporting is the mandatory final stage of `stock-research`; no separate report
+skill is exposed.
 
 The integrated report workflow targets three sibling artifacts:
 
@@ -456,9 +444,7 @@ ticker. The diagnostic bundle records:
         ├── claude/settings.json
         ├── codex/
         └── skills/
-            ├── stock-research/
-            ├── stock-quality-factors/
-            └── stock-research-html-report/
+            └── stock-research/
 ```
 
 Key components:
@@ -468,8 +454,10 @@ Key components:
   forward-range, evidence, recency, user-Q&A, and doctor workers
 - `stock-research/lib/` — schema, persistence, citations, recency, source tiers,
   conflicts, and SEC helper code
-- `stock-quality-factors/SKILL.md` — reliability and durability scoring contract
-- `stock-research-html-report/` — saved-bundle report rendering
+- `stock-research/references/quality-factors.md` — integrated reliability and
+  durability scoring contract
+- `stock-research/references/reporting.md` — integrated saved-bundle report
+  rendering contract
 - `src/.codex-plugin/plugin.json` — Codex plugin metadata
 - `src/codex/` — Codex shims, manifests, MCP metadata, and hooks
 - `src/claude/` — Claude-only configuration

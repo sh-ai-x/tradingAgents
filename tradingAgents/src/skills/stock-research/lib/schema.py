@@ -1,7 +1,7 @@
 """Schema for the ResearchBundle (output_schema)."""
 from __future__ import annotations
 
-BUNDLE_SCHEMA = {
+LEGACY_BUNDLE_SCHEMA = {
     "type": "object",
     "required": [
         "run_id", "ticker", "generated_at", "status",
@@ -98,3 +98,36 @@ BUNDLE_SCHEMA = {
         },
     },
 }
+
+MULTI_BUNDLE_SCHEMA = {
+    "type": "object",
+    "required": [
+        "run_id", "status", "retrieval_iso", "tickers", "current_prices",
+        "evidence_coverage", "fair_value", "forward_range",
+        "band_probability_table", "quality_factors", "comparative_ranking",
+        "action_guidance", "reference_confidence_table",
+    ],
+    "properties": {
+        "run_id": {"type": "string"},
+        "status": {"enum": ["complete", "partial", "halted"]},
+        "retrieval_iso": {"type": "string"},
+        "tickers": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "current_prices": {"type": "object"},
+        "evidence_coverage": {"type": "object"},
+        "fair_value": {"type": "object"},
+        "forward_range": {"type": "object"},
+        "band_probability_table": {"type": "array"},
+        "quality_factors": {"type": "object"},
+        "comparative_ranking": {"type": "array"},
+        "action_guidance": {"type": "array"},
+        "reference_confidence_table": {
+            "type": "array",
+            "items": {"type": "object", "required": [
+                "ticker", "url", "domain", "source_title", "published_iso",
+                "tier", "used_in", "reference_confidence_score", "confidence_grade",
+            ]},
+        },
+    },
+}
+
+BUNDLE_SCHEMA = {"anyOf": [LEGACY_BUNDLE_SCHEMA, MULTI_BUNDLE_SCHEMA]}

@@ -1,7 +1,7 @@
 {
   "name": "trading-agents",
-  "version": "1.0.0+codex.20260711101916",
-  "description": "Shared stock-research and HTML report skill package for Claude Code and Codex.",
+  "version": "1.0.0+codex.20260711124225",
+  "description": "Single-skill stock research plugin producing JSON, HTML, and PDF for Claude Code and Codex.",
   "author": {
     "name": "tradingAgents"
   },
@@ -16,8 +16,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Trading Agents",
-    "shortDescription": "Evidence-backed stock research and HTML reports.",
-    "longDescription": "Shared Claude Code and Codex skill package for evidence-backed stock research bundles, quality scoring, and local HTML report rendering.",
+    "shortDescription": "Evidence-backed research with JSON, HTML, and PDF.",
+    "longDescription": "One Claude Code and Codex skill for fresh stock research, integrated quality scoring, diagnostics, and verified JSON, HTML, and PDF artifacts.",
     "developerName": "tradingAgents",
     "category": "Productivity",
     "capabilities": [

@@ -1,5 +1,5 @@
 ---
-name: stock-quality-factors
+name: integrated-quality-factors-contract
 description: |
   Companion skill for stock-research. Adds a decision-quality layer with
   concrete reliability, economic moat, structural stability, growth quality,
@@ -24,26 +24,27 @@ metadata:
 
 # Stock Quality Factors
 
-This companion skill keeps the main `stock-research` skill focused on evidence
+This integrated contract keeps the main `stock-research` skill focused on evidence
 collection, fair value, fundamentals, macro state, and 6-month scenarios. It
 adds a separate decision-quality layer that explains how much confidence to put
 in the research and how durable the business setup appears.
 
 ## RALF Bundle Method
 
-Use this skill with `stock-research` through RALF:
+Apply this contract inside `stock-research` through RALF:
 
 1. **Route** -- `stock-research` performs fresh retrieval, evidence coverage,
    fundamentals, drivers, macro, fair value, and forward range.
 2. **Attach** -- pass the resulting evidence objects, citations, source tiers,
-   recency logs, and scenario assumptions to `stock-quality-factors`.
+   recency logs, and scenario assumptions into the integrated quality-factors
+   layer.
 3. **Layer** -- produce `quality_factors` without changing `fair_value`,
    `forward_range`, or source facts.
 4. **Finalize** -- `stock-research` embeds `quality_factors` in the bundle and
    renders the table-first summary.
 
-Do not use this skill as a standalone stock picker. It scores research quality
-and business durability; it does not produce investment advice.
+Do not use this section as a standalone stock picker. It scores research
+quality and business durability; it does not produce investment advice.
 
 ## Output Contract
 
@@ -73,7 +74,7 @@ Each factor must include:
 - `reasoning_trace`: concise explanation of what drove the score.
 - `missing_evidence`: list of required evidence that was not found in budget.
 
-The companion skill must also produce reader-facing tables:
+The integrated skill must also produce reader-facing tables:
 
 - `indicator_score_table`: one row per factor and sub-factor.
 - `reference_confidence_table`: one row per cited evidence item.
