@@ -17,10 +17,10 @@ metadata:
   recency_budget_days:
     price: 7
     drivers: 7
-    fundamentals: 90
-    fair_value: 90
-    forward_range: 90
-    macro: 30
+    fundamentals: 7
+    fair_value: 7
+    forward_range: 7
+    macro: 7
   citation_format: "[URL | published_iso | source_title | tier]"
   tier_a_disagreement_threshold_pct: 10
   bundle_root: ".stock-research"
@@ -98,15 +98,54 @@ For each ticker in a live `/stock-research <TICKER>` run, collect and persist an
 
 - `domain_count` must be at least 5 distinct news/source domains per ticker.
 - `evidence_count` must be at least 10 cited evidence items per ticker.
+- Every counted or displayed evidence item must have `published_iso` inside the
+  inclusive 7-day window ending at `retrieval_iso`. This single window applies
+  to drivers, fundamentals, fair value, forward range, macro, quality factors,
+  ranking, and user Q&A. Older sources do not count and must not be displayed
+  or used in synthesis, regardless of tier.
 - Every evidence item must include `url`, `domain`, `title`, `published_iso`,
   `tier`, and a concise `claim`.
 - Extract `published_iso` from the source's own displayed publication, release,
   filing, or session-close date. Do not substitute retrieval date.
-- If fewer than 5 domains or 10 evidence items are found in budget, emit
-  `status: "partial"`, add `[evidence_coverage_shortfall]` to `halt_flags`, and
-  record attempted search terms in `not_found_in_budget`.
+- Do not stop the normal research pass when fewer than 10 eligible items have
+  been found. Continue the iterative search procedure below until the floor is
+  met or the eligible public source space has been exhaustively searched.
+- If exhaustive retrieval still yields fewer than 5 domains or 10 eligible
+  items, emit `status: "partial"`, add `[evidence_coverage_shortfall]` to
+  `halt_flags`, and record every attempted search term and source lane in
+  `not_found_in_budget`. Never backfill with older or undated sources.
 - Tier-C sources may be collected internally for exploration only, but must not
   count toward `domain_count`, `evidence_count`, or displayed support.
+
+## Iterative Seven-Day Retrieval
+
+For each ticker, repeat retrieval and date validation until at least 10 eligible
+evidence items across at least 5 domains are collected:
+
+1. Search the ticker, company name, exchange-native name, and major products
+   with an explicit date range covering `retrieval_iso - 7 days` through
+   `retrieval_iso`.
+2. Search primary lanes separately: company IR/newsroom, regulator filings,
+   exchange disclosures, government releases, and official presentations.
+3. Search independent lanes separately: primary newswires, local-market
+   financial media, broker research, industry data providers, and reputable
+   market aggregators.
+4. Expand queries by claim class: earnings, guidance, analyst target,
+   valuation, product, customer, capex, supply, pricing, competition, policy,
+   macro, and risk.
+5. Deduplicate by canonical URL and underlying publication. Syndicated mirrors
+   of the same article count as one independent evidence item.
+6. Open every candidate and extract the source-displayed `published_iso` before
+   counting it. Search-result dates and retrieval timestamps are not valid
+   substitutes.
+7. Recount eligible items and domains after each pass. Persist
+   `search_iterations`, with queries, source lanes, accepted count, rejected
+   count, and rejection reasons for every pass.
+
+Do not declare `not_found_in_budget` merely because the first search page or
+first query set produced fewer than 10 items. Exhaust the query expansions and
+source lanes above first. "Continue until 10" never permits invented,
+duplicated, Tier-C, undated, or out-of-window evidence.
 
 ## Companion Skill Bundle
 
@@ -184,21 +223,20 @@ Example:
 }
 ```
 
-## Band Probability Table
+## Price-Band Probability Table
 
 In addition to the existing `forward_range` bear/base/bull scenarios, render a
-three-row `band_probability_table` for each ticker. This is the reader-facing
-probability table.
+reader-facing `band_probability_table` that answers: "What is the probability
+that the 6-month price lands in each displayed price interval?" This is a
+distribution across price intervals, not an "upside probability" score.
 
-Required rows:
-
-- `downside_band`
-- `neutral_band`
-- `upside_band`
+Render at least three ordered rows named `price_band_1`, `price_band_2`, and
+`price_band_3`. Add more rows only when the evidence supports useful additional
+resolution.
 
 Each row must include:
 
-- `band`
+- `band_id`
 - `price_range`
 - `probability`
 - `scenario_source`: one or more of `bear`, `base`, `bull`
@@ -209,19 +247,25 @@ Each row must include:
 
 Rules:
 
-- Probabilities must sum to 1.0 exactly after rounding adjustment.
-- If current price is available, define the three bands relative to current
-  price and forward scenarios:
-  - `downside_band`: expected 6-month price range below current price by more
-    than 10%, or the bearish scenario if all scenarios are above current price.
-  - `neutral_band`: expected 6-month price range within -10% to +15% of current
-    price, or the central overlap around the base scenario.
-  - `upside_band`: expected 6-month price range above current price by more
-    than 15%, or the bullish scenario if all scenarios are below current price.
+- Price bands must be ordered from lowest to highest, mutually exclusive, and
+  collectively cover the full rendered 6-month scenario range. Adjacent bands
+  may share a boundary only when interval inclusivity is explicitly recorded;
+  otherwise use non-overlapping boundaries.
+- Probabilities across all displayed price bands must sum to 1.0 exactly after
+  rounding adjustment.
+- Derive boundaries from the evidence-backed bear/base/bull ranges, resolving
+  overlaps into explicit price intervals. Do not force boundaries at arbitrary
+  current-price return thresholds such as -10% or +15%.
+- `probability` means the probability of finishing inside that exact
+  `price_range`. Never label it or reuse it as the probability that the stock
+  rises.
+- Current price is an annotation only. When available, calculate each band's
+  `implied_return_range`; it must not determine the band identity or ranking.
 - If current price is unavailable, keep absolute price ranges and omit implied
   returns; do not invent a price anchor.
-- The `band_probability_table` may reuse the `forward_range` probabilities but
-  must be rendered separately as a table-ready object.
+- The table may start from `forward_range` scenario probabilities, but any
+  overlapping scenario ranges must be redistributed into non-overlapping price
+  bands with the allocation method stated in `reasoning_trace`.
 - `return_risk_ratio` must be calculated explicitly from the rendered bands:
   - Use each band's midpoint return:
     `band_midpoint_return = ((price_range_low + price_range_high) / 2 / current_price.price) - 1`.
@@ -250,7 +294,6 @@ Each ranking row must include:
 - `ticker`
 - `risk_adjusted_score`
 - `analysis_confidence_score`
-- `upside_band_probability`
 - `structural_stability_score`
 - `growth_quality_score`
 - `key_positive`
@@ -261,10 +304,9 @@ Ranking method:
 
 - Primary sort: `risk_adjusted_score` descending.
 - Tie-breakers in order: `analysis_confidence_score`,
-  `upside_band_probability`, `structural_stability_score`, then
-  `growth_quality_score`.
-- If `analysis_confidence_score < 50`, cap rank at "watchlist" tier even when
-  upside probability is high.
+  `structural_stability_score`, then `growth_quality_score`.
+- If `analysis_confidence_score < 50`, cap rank at "watchlist" tier regardless
+  of the shape of the price-band distribution.
 
 Also produce:
 
@@ -296,16 +338,15 @@ tables in this order:
    - rank
    - current price
    - fair value band
-   - upside band probability
    - risk-adjusted score
    - analysis confidence score
    - recommended research action
 
-2. **Band Probability Table**
+2. **Price-Band Probability Table**
    - ticker
-   - downside band price range / probability
-   - neutral band price range / probability
-   - upside band price range / probability
+   - ordered, non-overlapping price range
+   - probability of finishing in that exact range
+   - scenario source and rationale
    - implied return ranges when yfinance current price is available
    - return/risk ratio when yfinance current price is available
 
@@ -362,8 +403,8 @@ MUST NOT:
 - Use `retrieval_iso` as the date basis for freshness, recency, or citation
   strings.
 - Substitute retrieval date when the publication date is missing.
-- Present a source as current unless its `published_iso` is within the
-  applicable recency budget.
+- Present or synthesize from a source unless its `published_iso` falls inside
+  the inclusive 7-day window ending at `retrieval_iso`.
 
 ## Execution Policy
 
@@ -391,11 +432,10 @@ conversation context from contaminating fresh research.
 1. **No invented numbers.** Every figure is cited with `[URL | published_iso |
    source_title | tier]`. If a figure cannot be cited, the worker returns
    `not_found_in_budget` with the search terms attempted.
-2. **Recency budgets are hard.** A claim about price older than 7 days, drivers
-   older than 7 days, fundamentals / fair value / forward range older than 90
-   days, or macro older than 30 days must be either flagged
-   `[recency_violated: Nd over budget]` (tier-A -> keep + downgrade display to C)
-   or dropped (tier-B/C -> drop + log to `recency_log`).
+2. **The 7-day publication window is hard.** Any source published before
+   `retrieval_iso - 7 days`, after `retrieval_iso`, or without a discoverable
+   source-displayed date is dropped from synthesis and display and logged in
+   `recency_log`. Tier-A status does not override this rule.
 3. **Independence.** Major claims require >= 2 independent sources. A single-
    source major claim is `[single_source]` and never asserted as fact.
 4. **Conflict resolution.** When tier-A sources disagree on a synthesis target
@@ -446,9 +486,9 @@ conversation context from contaminating fresh research.
 - `forward_range` -- exactly three 6-month bear/base/bull ranges with
   probabilities summing to 1.0, evidence-backed; independent from exact-close
   availability except for return-percentage calculations.
-- `band_probability_table` -- reader-facing three-band probability table
-  derived from forward-range scenarios and yfinance current price when
-  available.
+- `band_probability_table` -- reader-facing distribution across ordered,
+  non-overlapping 6-month price intervals; current price affects return
+  annotations only.
 - `stock-quality-factors` companion -- RALF Layer step for reliability,
   economic moat, structural stability, growth quality, and risk-adjusted score.
 - `comparative_ranking` / `action_guidance` -- multi-ticker ranking and
@@ -470,8 +510,10 @@ each dropped output recorded in `halt_flags` with a flag string
 `/stock-research doctor <run-id>` resolves the run file
 (`.stock-research/<TICKER>/<ISO>.json`) and validates:
 
-- Mechanical (default, <= seconds): tier classification present, recency
-  budgets met, >=2 sources per major claim, citation format, schema.
+- Mechanical (default, <= seconds): tier classification present, every cited
+  source inside the inclusive 7-day publication window, at least 10 eligible
+  references and 5 domains per ticker, >=2 sources per major claim, citation
+  format, and schema.
 - `--deep`: above + Decision Package field validity + cross-output rule
   application. Shows progress as it walks each rule.
 

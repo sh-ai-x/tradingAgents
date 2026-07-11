@@ -181,7 +181,6 @@ def build_summary_rows(data):
             esc(item.get("rank")),
             esc(money(price.get("price"), price.get("currency"))),
             esc(item.get("fair_value_band", "not found")),
-            esc(item.get("upside_band_probability", "not found")),
             esc(item.get("risk_adjusted_score")),
             esc(item.get("analysis_confidence_score")),
             esc(item.get("research_action", "not found")),
@@ -210,27 +209,32 @@ def build_band_rows(data):
     rows = []
     bands = data.get("band_probability_table") or []
     if isinstance(bands, dict):
-        iterable = []
-        for ticker, ticker_bands in bands.items():
-            if isinstance(ticker_bands, dict):
-                row = {"ticker": ticker, **ticker_bands}
-                iterable.append(row)
-            elif isinstance(ticker_bands, list):
-                row = {"ticker": ticker}
-                for item in ticker_bands:
-                    name = item.get("name") or item.get("band_name") or item.get("scenario_source")
-                    if name:
-                        row[str(name)] = item
-                iterable.append(row)
-        bands = iterable
-    for item in bands:
-        ticker = item.get("ticker", "")
-        rows.append([
-            esc(ticker),
-            esc(item.get("downside_band", item.get("downside", "not found"))),
-            esc(item.get("neutral_band", item.get("neutral", "not found"))),
-            esc(item.get("upside_band", item.get("upside", "not found"))),
-        ])
+        bands = [
+            {"ticker": ticker, "bands": value if isinstance(value, list) else [value]}
+            for ticker, value in bands.items()
+        ]
+    for ticker_entry in bands:
+        ticker = ticker_entry.get("ticker", "")
+        ticker_bands = ticker_entry.get("bands")
+        if ticker_bands is None:
+            # Backward compatibility for legacy fixed downside/neutral/upside bundles.
+            legacy_names = ("downside_band", "neutral_band", "upside_band")
+            ticker_bands = []
+            for name in legacy_names:
+                value = ticker_entry.get(name)
+                if isinstance(value, dict):
+                    ticker_bands.append({"band_id": name, **value})
+        for band in ticker_bands or []:
+            rows.append([
+                esc(ticker),
+                esc(band.get("band_id", band.get("band", "not found"))),
+                esc(band.get("price_range", "not found")),
+                esc(band.get("probability", "not found")),
+                esc(band.get("scenario_source", "not found")),
+                esc(band.get("implied_return_range", "not found")),
+                esc(band.get("return_risk_ratio", "not found")),
+                esc(band.get("rationale", "not found")),
+            ])
     return rows
 
 
@@ -327,11 +331,11 @@ def render(data, source_path):
     tickers = ", ".join(data.get("tickers", []))
     halt_flags = ", ".join(data.get("halt_flags", [])) or "none"
     summary = table(
-        ["Ticker", "Rank", "Current price", "Fair value band", "Upside probability", "Risk score", "Confidence", "Action"],
+        ["Ticker", "Rank", "Current price", "Fair value band", "Risk score", "Confidence", "Action"],
         build_summary_rows(data),
     )
     bands = table(
-        ["Ticker", "Downside band", "Neutral band", "Upside band"],
+        ["Ticker", "Price band", "Price range", "Probability", "Scenario source", "Implied return", "Return/risk", "Rationale"],
         build_band_rows(data),
     )
     indicators = table(
@@ -409,7 +413,7 @@ def render(data, source_path):
       </div>
     </header>
     <section><h2>Summary Ranking</h2>{summary}</section>
-    <section><h2>Band Probabilities</h2>{bands}</section>
+    <section><h2>Price-Band Probabilities</h2>{bands}</section>
     <section><h2>Indicator Scores</h2>{indicators}</section>
     <section><h2>Reference Coverage</h2>{reference_coverage}</section>
     <section><h2>Reference Confidence</h2>{references}</section>
