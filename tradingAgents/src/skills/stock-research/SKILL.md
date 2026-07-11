@@ -656,6 +656,13 @@ diagnostic and continue retrieval when possible.
 
 Doctor never re-executes workers. It reads the persisted bundle only.
 
+Doctor must support both legacy single-ticker bundles and current multi-ticker
+bundles. Resolve run IDs from both `tradingAgents/.stock-research/` and the
+workspace-level `.stock-research/`. For multi-ticker bundles, validate the
+persisted reference table, per-ticker coverage, publication dates, ticker
+assignments, Tier-C suppression, schema, and probability sums. Do not apply
+legacy flat-driver or `decision_package` assumptions to multi-ticker objects.
+
 ## Persistence
 
 Every run writes to `.stock-research/<TICKER>/<ISO_DATETIME>.json`. The

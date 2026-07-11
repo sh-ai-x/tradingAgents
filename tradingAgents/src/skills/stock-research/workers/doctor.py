@@ -8,6 +8,7 @@ Two modes:
 """
 from __future__ import annotations
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -45,12 +46,48 @@ def _check_evidence_coverage(bundle: dict[str, Any]) -> list[str]:
 
 def _check_recency(bundle: dict[str, Any]) -> list[str]:
     errors = []
-    for i, ev in enumerate(bundle.get("drivers", [])):
+    drivers = bundle.get("drivers", [])
+    if isinstance(drivers, dict):
+        drivers = [item for values in drivers.values() for item in values if isinstance(item, dict)]
+    for i, ev in enumerate(drivers):
         # Trust the recorded retrieval_iso + tier. tier-C is filtered upstream.
         budget = BUDGETS["drivers"]
         age = ev.get("age_days")
         if age is not None and age > budget and ev.get("tier") in {"A", "B"}:
             errors.append(f"drivers[{i}] recency violation not flagged")
+    return errors
+
+def _check_multi_bundle(bundle: dict[str, Any]) -> list[str]:
+    if not bundle.get("tickers"):
+        return []
+    errors = []
+    try:
+        retrieval = datetime.fromisoformat(str(bundle.get("retrieval_iso", "")).replace("Z", "+00:00"))
+    except ValueError:
+        return ["multi bundle retrieval_iso is invalid"]
+    if retrieval.tzinfo is None:
+        retrieval = retrieval.replace(tzinfo=timezone.utc)
+    for i, ref in enumerate(bundle.get("reference_confidence_table", [])):
+        if ref.get("tier") == "C":
+            errors.append(f"reference_confidence_table[{i}] displays tier C")
+        if not ref.get("ticker") and not ref.get("tickers"):
+            errors.append(f"reference_confidence_table[{i}] missing ticker assignment")
+        try:
+            published = datetime.fromisoformat(str(ref.get("published_iso", "")).replace("Z", "+00:00"))
+            if published.tzinfo is None:
+                published = published.replace(tzinfo=timezone.utc)
+            age = (retrieval - published).total_seconds() / 86400
+            if not 0 <= age <= 7:
+                errors.append(f"reference_confidence_table[{i}] outside seven-day window")
+        except ValueError:
+            errors.append(f"reference_confidence_table[{i}] invalid published_iso")
+    for entry in bundle.get("band_probability_table", []):
+        if not isinstance(entry, dict):
+            continue
+        bands = entry.get("bands", [])
+        total = sum(float(band.get("probability", 0)) for band in bands)
+        if bands and abs(total - 1.0) > 1e-9:
+            errors.append(f"{entry.get('ticker', 'unknown')}: band probabilities sum to {total}")
     return errors
 
 def _check_independence(bundle: dict[str, Any]) -> list[str]:
@@ -94,6 +131,8 @@ def _check_schema(bundle: dict[str, Any]) -> list[str]:
 
 def _check_decision_package(bundle: dict[str, Any]) -> list[str]:
     """--deep only: Decision Package field validity."""
+    if bundle.get("tickers"):
+        return []
     dp = bundle.get("decision_package", {}) or {}
     required = ["forecastable_claims", "lifecycle_assumptions", "contrary_evidence",
                 "owner_roles", "follow_up", "postmortem_required"]
@@ -102,6 +141,8 @@ def _check_decision_package(bundle: dict[str, Any]) -> list[str]:
 def _check_cross_output_rules(bundle: dict[str, Any]) -> list[str]:
     """--deep only: cross-output rule application."""
     errors = []
+    if bundle.get("tickers"):
+        return errors
     fv = bundle.get("fair_value", {})
     fr = bundle.get("forward_range", {})
     # Cross-check: fair_value band vs forward_range tier-anchor bracket.
@@ -133,6 +174,7 @@ def run(bundle: dict[str, Any], deep: bool = False) -> dict[str, Any]:
     errors += _check_independence(bundle)
     errors += _check_citations(bundle)
     errors += _check_evidence_coverage(bundle)
+    errors += _check_multi_bundle(bundle)
     errors += _check_schema(bundle)
     if deep:
         progress = ["[1/5] recency", "[2/5] independence", "[3/5] citations",

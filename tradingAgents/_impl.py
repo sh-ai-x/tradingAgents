@@ -83,9 +83,12 @@ def run_fixture(ticker: str, questions: list[str], fixtures: Path, runtime: Path
     return bundle
 
 def show(run_id: str, runtime: Path) -> dict[str, Any]:
-    for p in runtime.glob("*/*.json"):
-        if p.stem == run_id:
-            return json.loads(p.read_text())
+    roots = [runtime, runtime.parent.parent / ".stock-research"]
+    for root in dict.fromkeys(roots):
+        for p in root.glob("*/*.json"):
+            bundle = json.loads(p.read_text())
+            if p.stem == run_id or bundle.get("run_id") == run_id:
+                return bundle
     raise FileNotFoundError(f"run-id not found: {run_id}")
 
 def doctor(run_id: str, runtime: Path, deep: bool = False) -> dict[str, Any]:
