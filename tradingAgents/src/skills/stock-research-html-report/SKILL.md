@@ -22,8 +22,19 @@ Use this as a post-processing skill. Do not modify the original
 
 2. Classify the source data into report sections.
    - `metadata`: status, retrieval time, tickers, halt flags.
+   - `current_price`: per-ticker quote context sourced from `current_prices`
+     when present, or the backward-compatible `current_price` alias for
+     single-ticker bundles.
    - `summary_ranking`: comparative ranking, fair value, prices, confidence.
+     - Derive fair value bands from `per_ticker_results` or `fair_value` when
+       the ranking row omits a duplicate `fair_value_band`.
+     - Derive action labels from `action_guidance` when the ranking row omits
+       a duplicate `research_action`.
    - `band_probabilities`: downside, neutral, upside bands.
+     - Accept both the structured band-object shape and the older
+       `[low, high, probability]` tuple shape from bundled research output.
+     - Do not assume or rewrite probabilities to a fixed 25/50/25 split;
+       render the source probabilities as provided.
    - `indicator_scores`: reliability, moat, stability, growth, risk score.
    - `reference_coverage`: per-ticker count of in-window references, distinct
      domains, and pass/fail status against the coverage floor.
@@ -56,6 +67,12 @@ python3 src/skills/stock-research-html-report/scripts/render_stock_research_html
 - Do not invent missing fields. If a section is absent, render a visible
   "not found in bundle" note.
 - Keep citations as clickable source links when URLs are present.
+- Preserve the source probability values in the band table. If the bundle
+  uses raw tuples, translate them directly into readable rows instead of
+  substituting a synthetic allocation.
+- Render current price context explicitly. Prefer the `current_prices` map in
+  the bundle; if only `current_price` exists, show that object rather than
+  leaving the price column blank.
 - Show reference coverage by ticker before the reference tables. The default
   floor is at least 10 cited references, at least 5 distinct domains, and dates
   within 7 days of `retrieval_iso`. This is a hard per-ticker render gate, not

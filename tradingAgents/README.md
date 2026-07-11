@@ -44,6 +44,11 @@ and recency/conflict flags. A band probability is the probability that the
 6-month price finishes inside that exact interval; it is not an upside
 probability or a ranking input.
 
+Current price is stored in `current_prices` keyed by ticker, with
+`current_price` reserved as a single-ticker compatibility alias. Fair value
+bands are derived from `per_ticker_results` or `fair_value` when the ranking
+row does not repeat them, so the report does not depend on duplicated fields.
+
 Each live run searches iteratively until every ticker has at least 10 eligible
 references across at least 5 domains. Counted and displayed references must
 have a source-published date inside the inclusive 7-day window ending at the
@@ -87,6 +92,8 @@ run flags, displays the table-first ranking, and adds:
 - `Reference Coverage` - per ticker counts for recent references and distinct domains.
 - `Reference Confidence` - the full cited source table.
 - `References By Ticker` - direct ticker-specific references plus shared market, macro, or sector references used in the thesis.
+- `Current Price` - per-ticker yfinance quote context.
+- `Summary Ranking` - derived fair-value bands and action labels when the ranking row omits them.
 
 When a run must satisfy the stock-research coverage floor, use strict mode:
 

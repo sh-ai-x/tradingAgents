@@ -24,6 +24,11 @@ summary that can include:
 - optional quality-factor scoring for reliability, moat, stability, growth
   quality, and risk-adjusted score
 
+Current price is stored in the bundle as `current_prices` keyed by ticker,
+with `current_price` kept only as a single-ticker compatibility alias. Fair
+value bands are derived from `per_ticker_results` or `fair_value` when the
+ranking row does not repeat them.
+
 ## Usage
 
 Live research should be run through Claude Code or Codex so the agent can
@@ -60,6 +65,10 @@ Band Probability Table
 The exact numbers depend on current sources gathered during the run. The skill
 keeps citations and recency/conflict flags with the bundle so the result can be
 audited later.
+
+The HTML report renders the current-price section explicitly and falls back to
+derived fair-value bands plus action labels when the summary rows omit duplicate
+fields.
 
 For local deterministic testing, use the fixture runner:
 

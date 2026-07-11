@@ -212,7 +212,9 @@ def build_detailed_analysis(data):
 
 
 def build_summary_rows(data):
-    prices = data.get("current_prices", {})
+    prices = current_price_map(data)
+    fair_values = fair_value_map(data)
+    actions = action_guidance_map(data)
     rows = []
     for item in data.get("comparative_ranking", []):
         ticker = item.get("ticker", "")
@@ -221,10 +223,84 @@ def build_summary_rows(data):
             esc(ticker),
             esc(item.get("rank")),
             esc(money(price.get("price"), price.get("currency"))),
-            esc(item.get("fair_value_band", "not found")),
+            esc(format_fair_value_band(item.get("fair_value_band"), fair_values.get(ticker))),
             esc(item.get("risk_adjusted_score")),
             esc(item.get("analysis_confidence_score")),
-            esc(item.get("research_action", "not found")),
+            esc(item.get("research_action", actions.get(ticker, "not found"))),
+        ])
+    return rows
+
+
+def current_price_map(data):
+    prices = {}
+    raw_map = data.get("current_prices")
+    if isinstance(raw_map, dict):
+        for ticker, payload in raw_map.items():
+            if isinstance(payload, dict):
+                prices[ticker] = payload
+    raw_single = data.get("current_price")
+    if isinstance(raw_single, dict):
+        ticker = raw_single.get("ticker_used") or data.get("ticker")
+        if ticker and ticker not in prices:
+            prices[ticker] = raw_single
+    return prices
+
+
+def fair_value_map(data):
+    values = {}
+    raw = data.get("per_ticker_results")
+    if isinstance(raw, dict):
+        for ticker, payload in raw.items():
+            if isinstance(payload, dict):
+                values[ticker] = payload
+    fv = data.get("fair_value")
+    if isinstance(fv, dict):
+        ticker = data.get("ticker")
+        if ticker and ticker not in values:
+            values[ticker] = fv
+    return values
+
+
+def format_fair_value_band(explicit_band, payload):
+    if explicit_band not in (None, "", [], {}):
+        if isinstance(explicit_band, (list, tuple)) and len(explicit_band) >= 2:
+            return f"{money(explicit_band[0], 'USD' if isinstance(explicit_band[0], (int, float)) else '')} - {money(explicit_band[1], 'USD' if isinstance(explicit_band[1], (int, float)) else '')}"
+        return explicit_band
+    if not isinstance(payload, dict):
+        return "not found"
+    band = payload.get("fair_value_band")
+    currency = payload.get("currency", "")
+    if isinstance(band, (list, tuple)) and len(band) >= 2:
+        return f"{money(band[0], currency)} - {money(band[1], currency)}"
+    if payload.get("band_low") is not None and payload.get("band_high") is not None:
+        return f"{money(payload.get('band_low'), currency)} - {money(payload.get('band_high'), currency)}"
+    if payload.get("point") is not None:
+        return money(payload.get("point"), currency)
+    return "not found"
+
+
+def action_guidance_map(data):
+    mapping = {}
+    for row in data.get("action_guidance", []):
+        if not isinstance(row, dict):
+            continue
+        ticker = row.get("ticker")
+        label = row.get("label")
+        if ticker and label:
+            mapping[ticker] = label
+    return mapping
+
+
+def build_current_price_rows(data):
+    rows = []
+    for ticker, price in current_price_map(data).items():
+        rows.append([
+            esc(ticker),
+            esc(price.get("status", "not found")),
+            esc(money(price.get("price"), price.get("currency"))),
+            esc(price.get("asof_iso", "not found")),
+            esc(price.get("source", "not found")),
+            esc(price.get("reason", price.get("price_type", "latest quote from yfinance"))),
         ])
     return rows
 
@@ -254,7 +330,25 @@ def build_band_rows(data):
             {"ticker": ticker, "bands": value if isinstance(value, list) else [value]}
             for ticker, value in bands.items()
         ]
+    def format_price_range(entry, currency_hint=""):
+        if not isinstance(entry, dict):
+            return "not found"
+        if entry.get("price_range"):
+            return entry.get("price_range")
+        low = entry.get("low")
+        high = entry.get("high")
+        if low is None or high is None:
+            return "not found"
+        currency = entry.get("currency", currency_hint)
+        if currency == "USD":
+            return f"USD {float(low):,.0f}-{float(high):,.0f}"
+        if currency == "KRW":
+            return f"KRW {float(low):,.0f}-{float(high):,.0f}"
+        return f"{float(low):,.0f}-{float(high):,.0f}" + (f" {currency}" if currency else "")
+
     for ticker_entry in bands:
+        if not isinstance(ticker_entry, dict):
+            continue
         ticker = ticker_entry.get("ticker", "")
         ticker_bands = ticker_entry.get("bands")
         if ticker_bands is None:
@@ -265,11 +359,34 @@ def build_band_rows(data):
                 value = ticker_entry.get(name)
                 if isinstance(value, dict):
                     ticker_bands.append({"band_id": name, **value})
-        for band in ticker_bands or []:
+        normalized_bands = []
+        if isinstance(ticker_bands, list):
+            for idx, band in enumerate(ticker_bands, start=1):
+                if isinstance(band, dict):
+                    normalized_bands.append(band)
+                    continue
+                if isinstance(band, (list, tuple)) and len(band) >= 3:
+                    low, high, probability = band[:3]
+                    normalized_bands.append({
+                        "band_id": f"price_band_{idx}",
+                        "price_range": format_price_range({"low": low, "high": high}, ticker_entry.get("currency", "")),
+                        "probability": probability,
+                        "scenario_source": ticker_entry.get("scenario_source", "not found"),
+                        "rationale": ticker_entry.get("rationale", "not found"),
+                        "currency": ticker_entry.get("currency", ""),
+                    })
+                elif band is not None:
+                    normalized_bands.append({"band_id": f"price_band_{idx}", "price_range": "not found", "probability": "not found"})
+        elif isinstance(ticker_bands, dict):
+            normalized_bands.append(ticker_bands)
+
+        for band in normalized_bands:
+            if not isinstance(band, dict):
+                continue
             rows.append([
                 esc(ticker),
                 esc(band.get("band_id", band.get("band", "not found"))),
-                esc(band.get("price_range", "not found")),
+                esc(format_price_range(band, ticker_entry.get("currency", ""))),
                 esc(band.get("probability", "not found")),
                 esc(band.get("scenario_source", "not found")),
                 esc(band.get("implied_return_range", "not found")),
@@ -449,6 +566,10 @@ def render(data, source_path):
         ["Ticker", "Rank", "Current price", "Fair value band", "Risk score", "Confidence", "Action"],
         build_summary_rows(data),
     )
+    current_prices = table(
+        ["Ticker", "Status", "Price", "As of", "Source", "Reason"],
+        build_current_price_rows(data),
+    )
     bands = table(
         ["Ticker", "Price band", "Price range", "Probability", "Scenario source", "Implied return", "Return/risk", "Rationale"],
         build_band_rows(data),
@@ -535,6 +656,7 @@ def render(data, source_path):
         <span class="pill warn">Halt flags: {esc(halt_flags)}</span>
       </div>
     </header>
+    <section><h2>Current Price</h2>{current_prices}</section>
     <section><h2>Summary Ranking</h2>{summary}</section>
     <section><h2>Price-Band Probabilities</h2>{bands}</section>
     <section><h2>Indicator Scores</h2>{indicators}</section>
@@ -561,13 +683,20 @@ def main():
     output = args.output or args.input.with_suffix(".html")
     failures = coverage_failures(data)
     narrative = narrative_failures(data)
-    if failures or narrative:
+    if failures:
         print(json.dumps({
             "coverage_failures": failures,
             "detailed_analysis_failures": narrative,
         }, indent=2), flush=True)
         raise SystemExit(2)
     output.write_text(render(data, args.input), encoding="utf-8")
+    if narrative:
+        print(json.dumps({
+            "coverage_failures": failures,
+            "detailed_analysis_failures": narrative,
+        }, indent=2), flush=True)
+        print(output)
+        raise SystemExit(2)
     print(output)
 
 

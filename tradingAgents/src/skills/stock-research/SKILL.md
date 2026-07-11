@@ -226,16 +226,21 @@ price-relative synthesis:
   do not install dependencies ad hoc inside the skill run.
 - Use the exchange-native ticker when known, e.g. `MU`, `SNDK`, `NVDA`,
   `000660.KS` for SK Hynix.
-- Record a `current_price` object with `ticker_used`, `currency`, `price`,
-  `price_type`, `market_state`, `asof_iso`, `source`, and `retrieval_iso`.
+- Record current prices in a `current_prices` map keyed by ticker. Each entry
+  must contain `ticker_used`, `currency`, `price`, `price_type`,
+  `market_state`, `asof_iso`, `source`, and `retrieval_iso`.
+- For single-ticker bundles, keep `current_price` as a backward-compatible
+  alias of the same object. For multi-ticker bundles, `current_prices` is the
+  canonical source for the report layer.
 - Prefer `regularMarketPrice` when the quote timestamp is available and the
   market state is clear. Otherwise use `regularMarketPreviousClose` or the
   latest historical regular-session close from yfinance.
 - `asof_iso` must be the quote timestamp or session date supplied by yfinance,
   not a substituted retrieval timestamp.
 - If yfinance is unavailable, fails, or lacks a timestamp/session date, set
-  `current_price.status: "unavailable"` and omit price-relative returns.
-  Continue with absolute fair value and forward-range scenarios.
+  `current_prices[ticker].status: "unavailable"` and omit price-relative
+  returns for that ticker. Continue with absolute fair value and forward-range
+  scenarios.
 - Treat yfinance as Tier-B aggregator evidence. Do not use it as Tier-A
   fundamentals support.
 
@@ -265,6 +270,13 @@ distribution across price intervals, not an "upside probability" score.
 Render at least three ordered rows named `price_band_1`, `price_band_2`, and
 `price_band_3`. Add more rows only when the evidence supports useful additional
 resolution.
+
+Probability assignment must be model-driven, not template-driven. Use the
+LLM to infer each band's probability from the cited evidence, scenario
+dispersion, source quality, and recency. Do not default to a preset split such
+as `25/50/25` unless that exact allocation is the direct result of the evidence
+and the model's synthesis. If the evidence is weak or ambiguous, lower the
+confidence in the explanation instead of forcing a canned distribution.
 
 Each row must include:
 
@@ -298,6 +310,10 @@ Rules:
 - The table may start from `forward_range` scenario probabilities, but any
   overlapping scenario ranges must be redistributed into non-overlapping price
   bands with the allocation method stated in `reasoning_trace`.
+- The allocation method itself must be explained from the evidence, not from a
+  fixed formula. The model should state why the probability mass lands where it
+  does, using the support, contradictions, and scenario geometry in the current
+  bundle.
 - `return_risk_ratio` must be calculated explicitly from the rendered bands:
   - Use each band's midpoint return:
     `band_midpoint_return = ((price_range_low + price_range_high) / 2 / current_price.price) - 1`.
@@ -324,6 +340,8 @@ Each ranking row must include:
 
 - `rank`
 - `ticker`
+- `fair_value_band` or enough per-ticker fair-value payload for the report
+  layer to derive it from `per_ticker_results` / `fair_value`
 - `risk_adjusted_score`
 - `analysis_confidence_score`
 - `structural_stability_score`
