@@ -1,11 +1,10 @@
 ---
 name: stock-research
 description: |
-  Evidence-backed stock research. Takes a ticker + optional research questions
-  and emits a table-first research bundle (fair value, drivers, fundamentals,
-  macro snapshot, 6-month forward range, user Q&A) with inline citations,
-  tier-classified sources (A/B/C), recency budgets, and conflict-resolution
-  rules. No investment advice — research only.
+  Run evidence-backed stock research and create JSON, self-contained HTML, and
+  verified PDF artifacts in one invocation. Supports one or more tickers,
+  valuation, scenarios, integrated quality factors, citations, diagnostics,
+  saved-run validation, and complete or halted reports. Research only.
 metadata:
   version: 1.0.0
   capability: [read, compute, write-confirm]
@@ -59,6 +58,21 @@ metadata:
 
 The skill captures the requested research scope, then orchestrates worker
 outputs to produce a persisted ResearchBundle.
+
+## Required Integrated Contracts
+
+Before every live run, read both reference contracts completely and apply them
+as part of this single skill:
+
+- `references/quality-factors.md` — preserve the complete former integrated
+  quality-factors scoring, evidence, grade, cap, and output contract.
+- `references/reporting.md` — preserve the complete former report coverage,
+  narrative, reference, and rendering contract.
+
+These files are references, not separately exposed skills. Their requirements
+remain mandatory and must not be replaced by the shorter summary below. When a
+rule conflicts, keep the stricter evidence, coverage, narrative, or artifact
+validation requirement.
 
 ## Invocation
 
@@ -179,25 +193,18 @@ first query set produced fewer than 10 items. Exhaust the query expansions and
 source lanes above first. "Continue until 10" never permits invented,
 duplicated, Tier-C, undated, or out-of-window evidence.
 
-## Companion Skill Bundle
+## Integrated Quality Factors
 
-Keep this skill focused on fresh retrieval, evidence coverage, fair value,
-drivers, fundamentals, macro state, 6-month forward range, and user Q&A. Do not
-inline long decision-quality frameworks here. When the user asks for concrete
-reliability, economic moat, structural stability, geopolitical/China risk,
-macro sensitivity, DeepSeek/Huawei/YMTC/CXMT exposure, or growth-quality
-scoring, load the companion skill:
-
-- `trading-agents:stock-quality-factors`
-
-Use the RALF bundle method:
-
-1. **Route** -- this skill gathers fresh evidence and builds the core bundle.
-2. **Attach** -- pass evidence, citations, recency logs, and scenario
-   assumptions to `stock-quality-factors`.
-3. **Layer** -- the companion skill computes `quality_factors`.
-4. **Finalize** -- embed `quality_factors` in the research bundle without
-   changing `fair_value`, `forward_range`, or cited source facts.
+Compute quality factors directly inside this skill after the fresh evidence
+layer is complete. Score reliability, economic moat, structural stability,
+growth quality, and their equal-weight risk-adjusted average from 0-100. Tie
+every sub-score to persisted Tier-A/B evidence or an explicit missing-evidence
+penalty. Reliability covers source quality, independence, recency, consistency,
+and numeric traceability. Moat covers technology, switching cost, scale,
+ecosystem, pricing power, and customer stickiness. Stability covers
+geopolitics, China competition, macro, supply chain, policy, and cyclicality.
+Growth quality covers visibility, margins, demand durability, capex efficiency,
+estimate revisions, and market expansion. Never score from Tier C.
 
 `quality_factors` must contain:
 
@@ -624,8 +631,8 @@ conversation context from contaminating fresh research.
 - `band_probability_table` -- reader-facing distribution across ordered,
   non-overlapping 6-month price intervals; current price affects return
   annotations only.
-- `stock-quality-factors` companion -- RALF Layer step for reliability,
-  economic moat, structural stability, growth quality, and risk-adjusted score.
+- quality-factors layer -- RALF step for reliability, economic moat,
+  structural stability, growth quality, and risk-adjusted score.
 - `comparative_ranking` / `action_guidance` -- multi-ticker ranking and
   research workflow guidance, using quality factors and band probabilities.
 - `user_qa` -- answers to user research questions, own confidence.
@@ -671,3 +678,19 @@ compact summary pointer only. `/stock-research show <run-id>` re-renders from
 file. `follow_up` and `postmortem_required` accumulate across runs of the
 same ticker -- the head manager reads prior bundles in
 `.stock-research/<TICKER>/` and merges them.
+
+## Mandatory Artifact Finalization
+
+Every new research run must finish with JSON, HTML, and PDF. Persist and Doctor
+validate the JSON first, including the complete evidence-bearing
+`detailed_analysis`. Then run:
+
+```bash
+python3 src/skills/stock-research/scripts/build_all_artifacts.py <bundle.json>
+```
+
+The internal renderer writes self-contained HTML and Playwright Chromium writes
+an A4 PDF. Validate that JSON and HTML are non-empty and the PDF begins with
+`%PDF-`. Partial or halted research must still produce a visible diagnostic
+HTML/PDF; label uncomputed fields and preserve coverage failures. Never claim
+completion unless paths for all three verified artifacts are returned.

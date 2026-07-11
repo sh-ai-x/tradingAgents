@@ -1,12 +1,12 @@
 ---
-name: stock-research-html-report
+name: integrated-reporting-contract
 description: Render stock-research results into a local HTML report. Use after stock-research or whenever the user asks to show, convert, publish, preview, or render a stock research bundle, output, or JSON as HTML. Supports the flow output to JSON bundle to HTML report and should be used as a post-processing skill without modifying the source research skill.
 ---
 
 # Stock Research HTML Report
 
-Use this as a post-processing skill. Do not modify the original
-`stock-research` evidence rules or source facts.
+Apply this as the mandatory final stage of `stock-research`. Do not modify the
+research evidence rules or source facts.
 
 ## Workflow
 
@@ -51,7 +51,7 @@ Use this as a post-processing skill. Do not modify the original
 3. Render HTML with the bundled script:
 
 ```bash
-python3 src/skills/stock-research-html-report/scripts/render_stock_research_html.py bundle.json
+python3 src/skills/stock-research/scripts/build_all_artifacts.py bundle.json
 ```
 
 4. Show the result.
