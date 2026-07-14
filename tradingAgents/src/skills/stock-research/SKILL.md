@@ -149,6 +149,9 @@ Before synthesis, persistence, ranking, HTML conversion, or final display:
 4. Recompute the eligible reference count and distinct-domain count from the
    actual persisted `reference_confidence_table`, not from search notes or a
    worker summary.
+   `doctor` must fail when a declared `evidence_coverage` count cannot be
+   reproduced from those persisted ticker-assigned rows, including halted
+   diagnostic bundles.
 5. Require at least 10 eligible rows and 5 distinct domains for every ticker.
 6. Persist and render all eligible rows used to satisfy the gate. Never replace
    them with a shorter representative-source table or truncate them for

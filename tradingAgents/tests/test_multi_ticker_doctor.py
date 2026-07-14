@@ -54,6 +54,28 @@ class MultiTickerDoctorTests(unittest.TestCase):
         result = doctor.run(bundle)
         self.assertTrue(any("probabilities sum" in error for error in result["errors"]))
 
+    def test_declared_coverage_must_match_persisted_references(self):
+        bundle = multi_bundle()
+        bundle["evidence_coverage"] = {
+            "AAA": {"eligible_count": 10, "distinct_domains": 5, "status": "met"},
+            "BBB": {"eligible_count": 9, "distinct_domains": 5, "status": "shortfall"},
+        }
+        result = doctor.run(bundle)
+        self.assertTrue(any(
+            "BBB: declared coverage 9 refs/5 domains does not match persisted coverage 10 refs/5 domains" in error
+            for error in result["errors"]
+        ))
+
+    def test_declared_coverage_without_rows_cannot_pass(self):
+        bundle = multi_bundle()
+        bundle["reference_confidence_table"] = []
+        bundle["evidence_coverage"] = {
+            ticker: {"eligible_count": 10, "distinct_domains": 5, "status": "met"}
+            for ticker in ("AAA", "BBB")
+        }
+        result = doctor.run(bundle)
+        self.assertTrue(any("does not match persisted coverage 0 refs/0 domains" in error for error in result["errors"]))
+
     def test_show_searches_workspace_runtime_and_matches_embedded_run_id(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Path(temp)
