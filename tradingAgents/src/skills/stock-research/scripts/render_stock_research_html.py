@@ -133,7 +133,23 @@ def parse_iso_date(value):
         return None
 
 
-def reference_is_recent(ref, retrieval_dt, max_age_days=7):
+REFERENCE_BUDGETS = {
+    "price": 7, "drivers": 7, "current_setup": 7,
+    "fair_value": 30, "analyst_target": 30, "forward_range": 30,
+    "macro": 30, "fundamentals": 120, "filing": 120,
+    "quality_factors": 180, "moat": 180,
+    "structural_stability": 180, "growth_quality": 180,
+}
+
+
+def reference_budget(ref):
+    used_in = ref.get("used_in", "")
+    uses = [part.strip() for part in used_in.split(",")] if isinstance(used_in, str) else (used_in or [])
+    budgets = [REFERENCE_BUDGETS[use] for use in uses if use in REFERENCE_BUDGETS]
+    return min(budgets) if budgets else 30
+
+
+def reference_is_recent(ref, retrieval_dt, max_age_days=None):
     published = parse_iso_date(ref.get("published"))
     if not published or not retrieval_dt:
         return False
@@ -141,7 +157,8 @@ def reference_is_recent(ref, retrieval_dt, max_age_days=7):
         published = published.replace(tzinfo=timezone.utc)
     if retrieval_dt.tzinfo is None:
         retrieval_dt = retrieval_dt.replace(tzinfo=timezone.utc)
-    age_days = (retrieval_dt - published).total_seconds() / 86400
+    age_days = (retrieval_dt.date() - published.date()).days
+    max_age_days = reference_budget(ref) if max_age_days is None else max_age_days
     return 0 <= age_days <= max_age_days
 
 
@@ -446,7 +463,7 @@ def build_reference_coverage_rows(data):
     rows = []
     for ticker in data.get("tickers", []):
         refs = grouped.get(ticker, [])
-        recent_refs = [ref for ref in refs if reference_is_recent(ref, retrieval_dt, 7)]
+        recent_refs = [ref for ref in refs if reference_is_recent(ref, retrieval_dt)]
         domains = sorted({ref.get("domain") for ref in recent_refs if ref.get("domain")})
         count_ok = len(recent_refs) >= 10
         domain_ok = len(domains) >= 5
@@ -473,7 +490,7 @@ def coverage_failures(data):
     failures = []
     for ticker in data.get("tickers", []):
         refs = grouped.get(ticker, [])
-        recent_refs = [ref for ref in refs if reference_is_recent(ref, retrieval_dt, 7)]
+        recent_refs = [ref for ref in refs if reference_is_recent(ref, retrieval_dt)]
         domains = {ref.get("domain") for ref in recent_refs if ref.get("domain")}
         if len(recent_refs) < 10 or len(domains) < 5:
             failures.append({
@@ -561,7 +578,12 @@ def narrative_failures(data):
 def render(data, source_path):
     title = data.get("title") or "Stock Research HTML Report"
     tickers = ", ".join(data.get("tickers", []))
-    halt_flags = ", ".join(data.get("halt_flags", [])) or "none"
+    halt_flags = ", ".join(
+        item if isinstance(item, str) else ": ".join(
+            str(item.get(key, "")) for key in ("flag", "reason") if item.get(key)
+        )
+        for item in data.get("halt_flags", [])
+    ) or "none"
     summary = table(
         ["Ticker", "Rank", "Current price", "Fair value band", "Risk score", "Confidence", "Action"],
         build_summary_rows(data),

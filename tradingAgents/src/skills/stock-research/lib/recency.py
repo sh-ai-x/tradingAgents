@@ -9,11 +9,34 @@ Action = Literal["keep", "flag", "drop"]
 BUDGETS = {
     "price": 7,
     "drivers": 7,
-    "fundamentals": 90,
-    "fair_value": 90,
-    "forward_range": 90,
+    "fundamentals": 120,
+    "fair_value": 30,
+    "forward_range": 30,
     "macro": 30,
+    "quality_factors": 180,
 }
+
+REFERENCE_USE_BUDGETS = {
+    "price": BUDGETS["price"],
+    "drivers": BUDGETS["drivers"],
+    "current_setup": BUDGETS["drivers"],
+    "fair_value": BUDGETS["fair_value"],
+    "analyst_target": BUDGETS["fair_value"],
+    "forward_range": BUDGETS["forward_range"],
+    "fundamentals": BUDGETS["fundamentals"],
+    "filing": BUDGETS["fundamentals"],
+    "macro": BUDGETS["macro"],
+    "quality_factors": BUDGETS["quality_factors"],
+    "moat": BUDGETS["quality_factors"],
+    "structural_stability": BUDGETS["quality_factors"],
+    "growth_quality": BUDGETS["quality_factors"],
+}
+
+def reference_budget(used_in: list[str] | str | None) -> int:
+    """Return the strictest applicable budget for a persisted reference."""
+    uses = [used_in] if isinstance(used_in, str) else (used_in or [])
+    budgets = [REFERENCE_USE_BUDGETS[use] for use in uses if use in REFERENCE_USE_BUDGETS]
+    return min(budgets) if budgets else BUDGETS["macro"]
 
 @dataclass
 class RecencyResult:

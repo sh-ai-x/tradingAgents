@@ -14,7 +14,7 @@ from typing import Any
 from urllib.parse import urlparse
 from jsonschema import validate, ValidationError  # type: ignore
 from lib.citation import parse_citation, format_citation
-from lib.recency import BUDGETS
+from lib.recency import BUDGETS, reference_budget
 from lib.tier import classify as classify_tier
 from lib.schema import BUNDLE_SCHEMA
 
@@ -30,7 +30,7 @@ def _check_evidence_coverage(bundle: dict[str, Any]) -> list[str]:
             if isinstance(explicit, str):
                 explicit = [explicit]
             # Single-ticker legacy bundles may omit assignment.
-            if ticker in explicit or (len(tickers) == 1 and not explicit):
+            if (ticker in explicit or (len(tickers) == 1 and not explicit)) and _reference_is_eligible(ref, bundle):
                 assigned.append(ref)
         urls = {ref.get("url") for ref in assigned if ref.get("url")}
         domains = {
@@ -58,7 +58,7 @@ def _check_declared_coverage_consistency(bundle: dict[str, Any]) -> list[str]:
             explicit = ref.get("tickers", ref.get("ticker", []))
             if isinstance(explicit, str):
                 explicit = [explicit]
-            if ticker in explicit or (len(tickers) == 1 and not explicit):
+            if (ticker in explicit or (len(tickers) == 1 and not explicit)) and _reference_is_eligible(ref, bundle):
                 assigned.append(ref)
         actual_urls = {ref.get("url") for ref in assigned if ref.get("url")}
         actual_domains = {
@@ -75,6 +75,16 @@ def _check_declared_coverage_consistency(bundle: dict[str, Any]) -> list[str]:
                 f"does not match persisted coverage {len(actual_urls)} refs/{len(actual_domains)} domains"
             )
     return errors
+
+
+def _reference_is_eligible(ref: dict[str, Any], bundle: dict[str, Any]) -> bool:
+    try:
+        retrieval = datetime.fromisoformat(str(bundle.get("retrieval_iso", "")).replace("Z", "+00:00"))
+        published = datetime.fromisoformat(str(ref.get("published_iso", "")).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    age = (retrieval.date() - published.date()).days
+    return 0 <= age <= reference_budget(ref.get("used_in"))
 
 def _check_recency(bundle: dict[str, Any]) -> list[str]:
     errors = []
@@ -108,9 +118,13 @@ def _check_multi_bundle(bundle: dict[str, Any]) -> list[str]:
             published = datetime.fromisoformat(str(ref.get("published_iso", "")).replace("Z", "+00:00"))
             if published.tzinfo is None:
                 published = published.replace(tzinfo=timezone.utc)
-            age = (retrieval - published).total_seconds() / 86400
-            if not 0 <= age <= 7:
-                errors.append(f"reference_confidence_table[{i}] outside seven-day window")
+            age = (retrieval.date() - published.date()).days
+            budget = reference_budget(ref.get("used_in"))
+            if not 0 <= age <= budget:
+                errors.append(
+                    f"reference_confidence_table[{i}] outside {budget}-day "
+                    f"budget for {ref.get('used_in') or ['unclassified']}"
+                )
         except ValueError:
             errors.append(f"reference_confidence_table[{i}] invalid published_iso")
     for entry in bundle.get("band_probability_table", []):

@@ -16,10 +16,11 @@ metadata:
   recency_budget_days:
     price: 7
     drivers: 7
-    fundamentals: 7
-    fair_value: 7
-    forward_range: 7
-    macro: 7
+    fundamentals: 120
+    fair_value: 30
+    forward_range: 30
+    macro: 30
+    quality_factors: 180
   citation_format: "[URL | published_iso | source_title | tier]"
   tier_a_disagreement_threshold_pct: 10
   bundle_root: ".stock-research"
@@ -105,18 +106,18 @@ record `retrieval_iso` for the current run, but do not use it as the date basis
 for freshness, ranking, or citation strings. Emit `not_found_in_budget` with
 search terms attempted instead of filling gaps from old outputs.
 
-## Evidence Coverage Floor
+## Evidence Coverage And Synthesis Readiness
 
 For each ticker in a live `/stock-research <TICKER>` run, collect and persist an
 `evidence_coverage` block before synthesis:
 
 - `domain_count` must be at least 5 distinct news/source domains per ticker.
 - `evidence_count` must be at least 10 cited evidence items per ticker.
-- Every counted or displayed evidence item must have `published_iso` inside the
-  inclusive 7-day window ending at `retrieval_iso`. This single window applies
-  to drivers, fundamentals, fair value, forward range, macro, quality factors,
-  ranking, and user Q&A. Older sources do not count and must not be displayed
-  or used in synthesis, regardless of tier.
+- Apply the field-specific publication budgets in metadata. Use 7 days for
+  price and event drivers, 30 days for analyst targets, fair value, forward
+  scenarios, and macro, 120 days for company filings and fundamentals, and
+  180 days for durable moat and structural-quality evidence. Attach
+  `used_in` to every row so Doctor and the renderer can reproduce the budget.
 - Every evidence item must include `url`, `domain`, `title`, `published_iso`,
   `tier`, and a concise `claim`.
 - Extract `published_iso` from the source's own displayed publication, release,
@@ -125,20 +126,18 @@ For each ticker in a live `/stock-research <TICKER>` run, collect and persist an
   been found. Continue the iterative search procedure below until the floor is
   met or the eligible public source space has been exhaustively searched.
 - If exhaustive retrieval still yields fewer than 5 domains or 10 eligible
-  items for any ticker, do not finalize, rank, persist, or render that ticker's
-  research as a completed run. Continue retrieval through every source lane
-  and query expansion. If the public eligible source space is genuinely
-  exhausted, emit a halted diagnostic only, add
-  `[evidence_coverage_shortfall]`, and record every attempted search term and
-  source lane in `not_found_in_budget`. Never backfill with older, duplicated,
-  syndicated, undated, or Tier-C sources.
+  items, mark that ticker `partial`, cap reliability at 49, and preserve the
+  exact shortfall. Do not erase outputs that have their own minimum evidence.
+  Compute fair value when at least two independent in-budget valuation anchors
+  exist; compute quality factors with explicit missing-evidence penalties.
+  Omit only the specific output whose minimum inputs are absent.
 
-### Per-Ticker Ten-Reference Persistence Gate
+### Per-Ticker Ten-Reference Quality Gate
 
 The minimum is **10 eligible references for each ticker**, not 10 for the
 whole run and not 10 collected only in worker scratch output.
 
-Before synthesis, persistence, ranking, HTML conversion, or final display:
+Before final status assignment:
 
 1. Build the final `reference_confidence_table` from the accepted evidence.
 2. Attach `ticker` or `tickers` to every reference row. Shared macro evidence
@@ -152,13 +151,13 @@ Before synthesis, persistence, ranking, HTML conversion, or final display:
    `doctor` must fail when a declared `evidence_coverage` count cannot be
    reproduced from those persisted ticker-assigned rows, including halted
    diagnostic bundles.
-5. Require at least 10 eligible rows and 5 distinct domains for every ticker.
+5. Target at least 10 eligible rows and 5 distinct domains for every ticker.
 6. Persist and render all eligible rows used to satisfy the gate. Never replace
    them with a shorter representative-source table or truncate them for
    readability.
-7. Run `doctor` against the exact final bundle. A coverage failure is a hard
-   completion failure: return the halted diagnostic and resume retrieval; do
-   not claim that the research report is complete.
+7. Run `doctor` against the exact final bundle. Coverage failure prevents a
+   `complete` label but does not prevent evidence-backed per-output synthesis.
+   Mark the affected ticker and overall bundle `partial`.
 
 For a five-ticker run, the bundle must therefore contain at least 50
 ticker-reference assignments. A shared source can support more than one ticker
@@ -166,14 +165,15 @@ only when each assignment is explicit and the claim genuinely applies to each.
 - Tier-C sources may be collected internally for exploration only, but must not
   count toward `domain_count`, `evidence_count`, or displayed support.
 
-## Iterative Seven-Day Retrieval
+## Iterative Field-Budget Retrieval
 
 For each ticker, repeat retrieval and date validation until at least 10 eligible
 evidence items across at least 5 domains are collected:
 
 1. Search the ticker, company name, exchange-native name, and major products
-   with an explicit date range covering `retrieval_iso - 7 days` through
-   `retrieval_iso`.
+   using the applicable field budget. Keep the 7-day window for live drivers,
+   then expand valuation, filing, macro, and quality lanes to their declared
+   budgets.
 2. Search primary lanes separately: company IR/newsroom, regulator filings,
    exchange disclosures, government releases, and official presentations.
 3. Search independent lanes separately: primary newswires, local-market
@@ -455,7 +455,7 @@ Required fields:
 - `executive_summary`: explain the market regime, the central comparative
   conclusion, and the most important limitations in at least three substantive
   paragraphs.
-- `methodology`: explain the seven-day evidence window, tier policy,
+- `methodology`: explain the field-specific evidence budgets, tier policy,
   independence and deduplication rules, fair-value method, scenario-probability
   method, scoring method, ranking tie-breaks, and current-price limitations.
 - `ticker_analyses`: one object per ticker containing:
@@ -549,7 +549,7 @@ MUST NOT:
   strings.
 - Substitute retrieval date when the publication date is missing.
 - Present or synthesize from a source unless its `published_iso` falls inside
-  the inclusive 7-day window ending at `retrieval_iso`.
+  the applicable field budget ending at `retrieval_iso`.
 
 ## Execution Policy
 
@@ -577,10 +577,9 @@ conversation context from contaminating fresh research.
 1. **No invented numbers.** Every figure is cited with `[URL | published_iso |
    source_title | tier]`. If a figure cannot be cited, the worker returns
    `not_found_in_budget` with the search terms attempted.
-2. **The 7-day publication window is hard.** Any source published before
-   `retrieval_iso - 7 days`, after `retrieval_iso`, or without a discoverable
-   source-displayed date is dropped from synthesis and display and logged in
-   `recency_log`. Tier-A status does not override this rule.
+2. **Field-specific publication budgets are hard.** Drop sources older than
+   the budget for their `used_in` class or newer than `retrieval_iso`, and
+   log them in `recency_log`. Tier-A status does not override the budget.
 3. **Independence.** Major claims require >= 2 independent sources. A single-
    source major claim is `[single_source]` and never asserted as fact.
 4. **Conflict resolution.** When tier-A sources disagree on a synthesis target
@@ -647,10 +646,11 @@ conversation context from contaminating fresh research.
 
 If any worker returns `halted` with a reason unrelated to reference coverage,
 the bundle is emitted as `status: "partial"` with the dropped outputs listed in
-`omitted_outputs`. Reference coverage is stricter: fewer than 10 eligible
-persisted references or 5 domains for any ticker blocks completed synthesis,
-ranking, and report rendering for that ticker. Emit a halted coverage
-diagnostic and continue retrieval when possible.
+`omitted_outputs`. A coverage shortfall makes the affected ticker partial,
+not empty. Synthesize each output independently when its required inputs are
+present. In a multi-ticker run, set the bundle to `partial` when at least one
+ticker has synthesized outputs, and use `halted` only when no ticker has any
+synthesis-ready output.
 
 ## Doctor
 
@@ -658,7 +658,7 @@ diagnostic and continue retrieval when possible.
 (`.stock-research/<TICKER>/<ISO>.json`) and validates:
 
 - Mechanical (default, <= seconds): tier classification present, every cited
-  source inside the inclusive 7-day publication window, at least 10 eligible
+  source inside its applicable publication budget, at least 10 eligible
   references and 5 domains per ticker, >=2 sources per major claim, citation
   format, and schema.
 - `--deep`: above + Decision Package field validity + cross-output rule

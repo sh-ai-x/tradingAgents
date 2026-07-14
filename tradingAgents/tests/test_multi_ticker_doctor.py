@@ -76,6 +76,23 @@ class MultiTickerDoctorTests(unittest.TestCase):
         result = doctor.run(bundle)
         self.assertTrue(any("does not match persisted coverage 0 refs/0 domains" in error for error in result["errors"]))
 
+    def test_field_specific_recency_budget_accepts_recent_filing(self):
+        bundle = multi_bundle()
+        bundle["reference_confidence_table"][0]["published_iso"] = "2026-04-01"
+        bundle["reference_confidence_table"][0]["used_in"] = ["fundamentals"]
+        result = doctor.run(bundle)
+        self.assertFalse(any("reference_confidence_table[0] outside" in error for error in result["errors"]))
+
+    def test_field_specific_recency_budget_rejects_stale_driver(self):
+        bundle = multi_bundle()
+        bundle["reference_confidence_table"][0]["published_iso"] = "2026-07-01"
+        bundle["reference_confidence_table"][0]["used_in"] = ["drivers"]
+        result = doctor.run(bundle)
+        self.assertTrue(any(
+            "reference_confidence_table[0] outside 7-day budget" in error
+            for error in result["errors"]
+        ))
+
     def test_show_searches_workspace_runtime_and_matches_embedded_run_id(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Path(temp)
