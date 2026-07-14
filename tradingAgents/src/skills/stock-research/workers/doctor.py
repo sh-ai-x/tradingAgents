@@ -44,6 +44,38 @@ def _check_evidence_coverage(bundle: dict[str, Any]) -> list[str]:
             errors.append(f"{ticker}: persisted domain coverage {len(domains)}/5")
     return errors
 
+def _check_declared_coverage_consistency(bundle: dict[str, Any]) -> list[str]:
+    """Require declared coverage to be reproducible from persisted references."""
+    errors = []
+    declared = bundle.get("evidence_coverage") or {}
+    if not declared:
+        return errors
+    tickers = bundle.get("tickers") or ([bundle.get("ticker")] if bundle.get("ticker") else [])
+    refs = bundle.get("reference_confidence_table") or bundle.get("citations") or []
+    for ticker in tickers:
+        assigned = []
+        for ref in refs:
+            explicit = ref.get("tickers", ref.get("ticker", []))
+            if isinstance(explicit, str):
+                explicit = [explicit]
+            if ticker in explicit or (len(tickers) == 1 and not explicit):
+                assigned.append(ref)
+        actual_urls = {ref.get("url") for ref in assigned if ref.get("url")}
+        actual_domains = {
+            ref.get("domain") or urlparse(ref.get("url", "")).netloc
+            for ref in assigned
+            if ref.get("url") in actual_urls and (ref.get("domain") or urlparse(ref.get("url", "")).netloc)
+        }
+        item = declared.get(ticker, {})
+        declared_refs = item.get("eligible_count", item.get("evidence_count", 0))
+        declared_domains = item.get("distinct_domains", item.get("domain_count", 0))
+        if declared_refs != len(actual_urls) or declared_domains != len(actual_domains):
+            errors.append(
+                f"{ticker}: declared coverage {declared_refs} refs/{declared_domains} domains "
+                f"does not match persisted coverage {len(actual_urls)} refs/{len(actual_domains)} domains"
+            )
+    return errors
+
 def _check_recency(bundle: dict[str, Any]) -> list[str]:
     errors = []
     drivers = bundle.get("drivers", [])
@@ -174,6 +206,7 @@ def run(bundle: dict[str, Any], deep: bool = False) -> dict[str, Any]:
     errors += _check_independence(bundle)
     errors += _check_citations(bundle)
     errors += _check_evidence_coverage(bundle)
+    errors += _check_declared_coverage_consistency(bundle)
     errors += _check_multi_bundle(bundle)
     errors += _check_schema(bundle)
     if deep:
